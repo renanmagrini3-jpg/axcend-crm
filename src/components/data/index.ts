@@ -5,3 +5,4 @@ export { DataTable, type Column, type DataTableProps } from "./DataTable";
 export { TaskCard, type TaskCardData } from "./TaskCard";
 export { TaskList } from "./TaskList";
 export { NewTaskModal, type NewTaskModalProps } from "./NewTaskModal";
+export { ReportCard, type ReportCardProps } from "./ReportCard";
