@@ -26,6 +26,8 @@ import {
   BarChart3,
   Workflow,
   Banknote,
+  Download,
+  TrendingUp,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout";
 import { Card, Button, Badge, Input } from "@/components/ui";
@@ -316,6 +318,152 @@ function IntegrationsTab() {
   );
 }
 
+// --- Subscription Tab ---
+
+interface Invoice {
+  id: string;
+  date: string;
+  amount: string;
+  status: "paid" | "pending";
+}
+
+const MOCK_INVOICES: Invoice[] = [
+  { id: "INV-001", date: "08/04/2026", amount: "R$ 500,00", status: "paid" },
+  { id: "INV-002", date: "08/03/2026", amount: "R$ 500,00", status: "paid" },
+  { id: "INV-003", date: "08/02/2026", amount: "R$ 500,00", status: "paid" },
+  { id: "INV-004", date: "08/01/2026", amount: "R$ 500,00", status: "pending" },
+];
+
+function SubscriptionTab() {
+  const usedSeats = 8;
+  const totalSeats = 10;
+  const seatPercent = (usedSeats / totalSeats) * 100;
+
+  return (
+    <motion.div variants={fadeIn} initial="hidden" animate="visible" className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Assinatura</h2>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+          Gerencie seu plano e histórico de faturas.
+        </p>
+      </div>
+
+      {/* Current Plan Card */}
+      <Card hoverable={false} className="space-y-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500/15">
+              <TrendingUp size={22} className="text-orange-500" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-semibold text-[var(--text-primary)]">
+                  Axcend Pro
+                </h3>
+                <Badge variant="success" size="sm">
+                  Ativo
+                </Badge>
+              </div>
+              <p className="text-sm text-[var(--text-secondary)]">
+                R$ 500/mês
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm">
+              Alterar Plano
+            </Button>
+            <Button size="sm" icon={<ExternalLink size={14} />}>
+              Gerenciar Assinatura
+            </Button>
+          </div>
+        </div>
+
+        {/* Seats progress */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-[var(--text-secondary)]">Usuários</span>
+            <span className="text-sm font-medium text-[var(--text-primary)]">
+              {usedSeats} de {totalSeats}
+            </span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--bg-elevated)]">
+            <div
+              className="h-full rounded-full bg-orange-500 transition-all"
+              style={{ width: `${seatPercent}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Next billing */}
+        <div className="flex items-center gap-2 rounded-lg bg-[var(--bg-elevated)] px-4 py-3">
+          <Calendar size={16} className="text-[var(--text-muted)]" />
+          <span className="text-sm text-[var(--text-secondary)]">
+            Próxima cobrança:{" "}
+            <span className="font-medium text-[var(--text-primary)]">08/05/2026</span>
+          </span>
+        </div>
+      </Card>
+
+      {/* Invoice History */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">
+          Histórico de Faturas
+        </h3>
+        <Card hoverable={false} className="overflow-hidden !p-0">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--border-default)] bg-[var(--bg-elevated)]">
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-secondary)]">
+                  Data
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-secondary)]">
+                  Valor
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-secondary)]">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-right font-medium text-[var(--text-secondary)]">
+                  Ação
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {MOCK_INVOICES.map((inv) => (
+                <tr
+                  key={inv.id}
+                  className="border-b border-[var(--border-subtle)] last:border-0"
+                >
+                  <td className="px-4 py-3 text-[var(--text-primary)]">
+                    {inv.date}
+                  </td>
+                  <td className="px-4 py-3 text-[var(--text-primary)]">
+                    {inv.amount}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge
+                      variant={inv.status === "paid" ? "success" : "warning"}
+                      size="sm"
+                    >
+                      {inv.status === "paid" ? "Pago" : "Pendente"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button className="inline-flex items-center gap-1 text-xs text-orange-500 hover:text-orange-400 transition-colors">
+                      <Download size={14} />
+                      Download
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </div>
+    </motion.div>
+  );
+}
+
 // --- Placeholder Tab ---
 
 function PlaceholderTab({ label }: { label: string }) {
@@ -348,7 +496,7 @@ const TAB_COMPONENTS: Record<SettingsTab, () => React.JSX.Element> = {
   "loss-reasons": () => <PlaceholderTab label="Motivos de Perda" />,
   integrations: IntegrationsTab,
   notifications: () => <PlaceholderTab label="Notificações" />,
-  subscription: () => <PlaceholderTab label="Assinatura" />,
+  subscription: SubscriptionTab,
   playbooks: () => <PlaceholderTab label="Playbooks" />,
 };
 
