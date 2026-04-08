@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,4 +5,329 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ============================================
+// Enums
+// ============================================
+
+enum Role {
+  ADMIN
+  MANAGER
+  SELLER
+}
+
+enum BusinessMode {
+  B2B
+  B2C
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TaskType {
+  CALL
+  WHATSAPP
+  EMAIL
+  MEETING
+  FOLLOW_UP
+  PROPOSAL
+  CUSTOM
+}
+
+enum TaskStatus {
+  PENDING
+  COMPLETED
+  OVERDUE
+}
+
+enum ActivityType {
+  NOTE
+  EMAIL
+  CALL
+  MEETING
+  STAGE_CHANGE
+  TASK_COMPLETED
+  WHATSAPP
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+  SELECT
+  DATE
+  BOOLEAN
+}
+
+enum EntityType {
+  DEAL
+  CONTACT
+  COMPANY
+}
+
+// ============================================
+// Multi-tenancy
+// ============================================
+
+model Organization {
+  id        String       @id @default(cuid())
+  name      String
+  slug      String       @unique
+  mode      BusinessMode @default(B2B)
+  logo      String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  users        User[]
+  teams        Team[]
+  pipelines    Pipeline[]
+  deals        Deal[]
+  contacts     Contact[]
+  companies    Company[]
+  tasks        Task[]
+  activities   Activity[]
+  customFields CustomField[]
+}
+
+// ============================================
+// Users & Teams
+// ============================================
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  avatarUrl      String?
+  role           Role     @default(SELLER)
+  organizationId String
+  teamId         String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team         Team?        @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+
+  managedTeams   Team[]     @relation("TeamManager")
+  assignedDeals  Deal[]     @relation("DealAssignee")
+  assignedTasks  Task[]     @relation("TaskAssignee")
+  activities     Activity[]
+
+  @@index([organizationId])
+  @@index([teamId])
+}
+
+model Team {
+  id             String @id @default(cuid())
+  name           String
+  organizationId String
+  managerId      String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  manager      User         @relation("TeamManager", fields: [managerId], references: [id])
+  members      User[]       @relation("TeamMembers")
+
+  @@index([organizationId])
+}
+
+// ============================================
+// Pipeline
+// ============================================
+
+model Pipeline {
+  id             String   @id @default(cuid())
+  name           String
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stages       PipelineStage[]
+  deals        Deal[]
+
+  @@index([organizationId])
+}
+
+model PipelineStage {
+  id         String @id @default(cuid())
+  name       String
+  order      Int
+  pipelineId String
+
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals    Deal[]
+
+  @@index([pipelineId])
+}
+
+// ============================================
+// Deals
+// ============================================
+
+model Deal {
+  id             String    @id @default(cuid())
+  title          String
+  value          Decimal   @default(0) @db.Decimal(15, 2)
+  priority       Priority  @default(MEDIUM)
+  contactId      String
+  companyId      String?
+  pipelineId     String
+  stageId        String
+  assignedToId   String
+  organizationId String
+  lossReason     String?
+  closedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  contact      Contact       @relation(fields: [contactId], references: [id])
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  pipeline     Pipeline      @relation(fields: [pipelineId], references: [id])
+  stage        PipelineStage @relation(fields: [stageId], references: [id])
+  assignedTo   User          @relation("DealAssignee", fields: [assignedToId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  tasks      Task[]
+  activities Activity[]
+
+  @@index([organizationId])
+  @@index([stageId])
+  @@index([assignedToId])
+  @@index([contactId])
+  @@index([companyId])
+  @@index([pipelineId])
+}
+
+// ============================================
+// Contacts & Companies
+// ============================================
+
+model Contact {
+  id             String   @id @default(cuid())
+  name           String
+  email          String?
+  phone          String?
+  position       String?
+  companyId      String?
+  organizationId String
+  origin         String?
+  createdAt      DateTime @default(now())
+
+  company      Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  deals      Deal[]
+  tasks      Task[]
+  activities Activity[]
+
+  @@index([organizationId])
+  @@index([companyId])
+}
+
+model Company {
+  id             String   @id @default(cuid())
+  name           String
+  cnpj           String?
+  segment        String?
+  size           String?
+  website        String?
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  contacts Contact[]
+  deals    Deal[]
+
+  @@index([organizationId])
+}
+
+// ============================================
+// Tasks
+// ============================================
+
+model Task {
+  id             String     @id @default(cuid())
+  title          String
+  type           TaskType   @default(CUSTOM)
+  priority       Priority   @default(MEDIUM)
+  status         TaskStatus @default(PENDING)
+  dueAt          DateTime
+  completedAt    DateTime?
+  dealId         String?
+  contactId      String
+  assignedToId   String
+  organizationId String
+  notes          String?
+  createdAt      DateTime   @default(now())
+
+  deal         Deal?        @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  contact      Contact      @relation(fields: [contactId], references: [id])
+  assignedTo   User         @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([assignedToId])
+  @@index([contactId])
+  @@index([dealId])
+  @@index([status])
+  @@index([dueAt])
+}
+
+// ============================================
+// Activities (timeline)
+// ============================================
+
+model Activity {
+  id             String       @id @default(cuid())
+  type           ActivityType
+  content        String
+  dealId         String?
+  contactId      String?
+  userId         String
+  organizationId String
+  createdAt      DateTime     @default(now())
+
+  deal         Deal?        @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([dealId])
+  @@index([contactId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ============================================
+// Custom Fields
+// ============================================
+
+model CustomField {
+  id             String     @id @default(cuid())
+  name           String
+  type           FieldType
+  options        Json?
+  entity         EntityType
+  organizationId String
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  values       CustomFieldValue[]
+
+  @@index([organizationId])
+  @@index([entity])
+}
+
+model CustomFieldValue {
+  id            String @id @default(cuid())
+  value         String
+  customFieldId String
+  entityId      String
+  entityType    EntityType
+
+  customField CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+
+  @@index([customFieldId])
+  @@index([entityId, entityType])
 }
