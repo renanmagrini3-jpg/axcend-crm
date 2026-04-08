@@ -6,3 +6,4 @@ export { TaskCard, type TaskCardData } from "./TaskCard";
 export { TaskList } from "./TaskList";
 export { NewTaskModal, type NewTaskModalProps } from "./NewTaskModal";
 export { ReportCard, type ReportCardProps } from "./ReportCard";
+export { WorkflowBuilder } from "./WorkflowBuilder";
