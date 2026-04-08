@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "@/styles/globals.css";
 
@@ -15,8 +15,27 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Axcend CRM",
+  title: {
+    default: "Axcend CRM",
+    template: "Axcend CRM | %s",
+  },
   description: "Plataforma premium de gestão comercial — Axcend Sales",
+  openGraph: {
+    title: "Axcend CRM",
+    description: "Plataforma premium de gestão comercial — Axcend Sales",
+    siteName: "Axcend CRM",
+    locale: "pt_BR",
+    type: "website",
+  },
+  icons: {
+    icon: "/favicon.ico",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#F97316",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

@@ -96,6 +96,14 @@ function Header({ onMenuClick }: HeaderProps) {
         />
       </div>
 
+      {/* Mobile search icon */}
+      <button
+        className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] transition-colors md:hidden"
+        aria-label="Buscar"
+      >
+        <Search size={20} />
+      </button>
+
       {/* Actions */}
       <div className="flex items-center gap-1">
         {/* Notifications */}
