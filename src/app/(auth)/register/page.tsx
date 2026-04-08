@@ -1,12 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Eye, EyeOff, Mail, Lock, User, Building2, Users, ChevronRight, ChevronLeft } from "lucide-react";
-import { Button, Input } from "@/components/ui";
+import {
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  User,
+  Building2,
+  Users,
+  ChevronRight,
+  ChevronLeft,
+} from "lucide-react";
+import { Button, Input, useToast } from "@/components/ui";
 import { fadeIn } from "@/lib/motion";
 import { cn } from "@/lib/cn";
+import { createBrowserClient } from "@/lib/supabase/client";
 
 function GoogleIcon() {
   return (
@@ -51,8 +63,11 @@ const stepSlide = {
 };
 
 export default function RegisterPage() {
+  const router = useRouter();
+  const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
+  const [loading, setLoading] = useState(false);
 
   // Step 1
   const [name, setName] = useState("");
@@ -68,6 +83,18 @@ export default function RegisterPage() {
   const [teamSize, setTeamSize] = useState<TeamSize>("1-5");
 
   function goNext() {
+    if (!name || !email || !password || !confirmPassword) {
+      toast("Preencha todos os campos.", "warning");
+      return;
+    }
+    if (password.length < 6) {
+      toast("A senha deve ter pelo menos 6 caracteres.", "warning");
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast("As senhas não coincidem.", "error");
+      return;
+    }
     setDirection(1);
     setStep(2);
   }
@@ -75,6 +102,56 @@ export default function RegisterPage() {
   function goBack() {
     setDirection(-1);
     setStep(1);
+  }
+
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!companyName) {
+      toast("Informe o nome da empresa.", "warning");
+      return;
+    }
+
+    setLoading(true);
+    const supabase = createBrowserClient();
+
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: name,
+          company_name: companyName,
+          business_mode: businessMode,
+          team_size: teamSize,
+        },
+      },
+    });
+
+    if (error) {
+      toast(error.message, "error");
+      setLoading(false);
+      return;
+    }
+
+    toast(
+      "Conta criada! Verifique seu email para confirmar o cadastro.",
+      "success",
+    );
+    router.push("/login");
+  }
+
+  async function handleOAuth(provider: "google" | "azure") {
+    const supabase = createBrowserClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/api/auth/callback`,
+      },
+    });
+    if (error) {
+      toast(error.message, "error");
+    }
   }
 
   return (
@@ -188,7 +265,11 @@ export default function RegisterPage() {
                   </button>
                 </div>
 
-                <Button className="w-full" size="lg" icon={<ChevronRight size={16} />}>
+                <Button
+                  className="w-full"
+                  size="lg"
+                  icon={<ChevronRight size={16} />}
+                >
                   Próximo
                 </Button>
               </motion.form>
@@ -200,7 +281,7 @@ export default function RegisterPage() {
                 initial="enter"
                 animate="center"
                 exit="exit"
-                onSubmit={(e) => e.preventDefault()}
+                onSubmit={handleRegister}
                 className="space-y-4"
               >
                 <Input
@@ -260,7 +341,9 @@ export default function RegisterPage() {
                     />
                     <select
                       value={teamSize}
-                      onChange={(e) => setTeamSize(e.target.value as TeamSize)}
+                      onChange={(e) =>
+                        setTeamSize(e.target.value as TeamSize)
+                      }
                       className="w-full appearance-none rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] transition-colors focus:border-[var(--border-focus)] focus:outline-none"
                     >
                       <option value="1-5">1 a 5 vendedores</option>
@@ -281,7 +364,7 @@ export default function RegisterPage() {
                   >
                     Voltar
                   </Button>
-                  <Button className="flex-1" size="lg">
+                  <Button className="flex-1" size="lg" loading={loading}>
                     Criar Conta
                   </Button>
                 </div>
@@ -293,16 +376,30 @@ export default function RegisterPage() {
         {/* Divider */}
         <div className="my-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-[var(--border-default)]" />
-          <span className="text-xs text-[var(--text-muted)]">ou continue com</span>
+          <span className="text-xs text-[var(--text-muted)]">
+            ou continue com
+          </span>
           <div className="h-px flex-1 bg-[var(--border-default)]" />
         </div>
 
         {/* SSO */}
         <div className="grid grid-cols-2 gap-3">
-          <Button variant="secondary" size="md" icon={<GoogleIcon />}>
+          <Button
+            variant="secondary"
+            size="md"
+            icon={<GoogleIcon />}
+            onClick={() => handleOAuth("google")}
+            type="button"
+          >
             Google
           </Button>
-          <Button variant="secondary" size="md" icon={<MicrosoftIcon />}>
+          <Button
+            variant="secondary"
+            size="md"
+            icon={<MicrosoftIcon />}
+            onClick={() => handleOAuth("azure")}
+            type="button"
+          >
             Microsoft
           </Button>
         </div>

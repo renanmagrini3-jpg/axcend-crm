@@ -37,13 +37,18 @@ const navItems = [
 interface SidebarProps {
   mobileOpen: boolean;
   onMobileClose: () => void;
+  userName?: string;
+  userEmail?: string;
 }
 
-function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
+function Sidebar({ mobileOpen, onMobileClose, userName, userEmail }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
 
   const toggleCollapse = useCallback(() => setCollapsed((p) => !p), []);
+
+  const displayName = userName || "Usuário";
+  const displayEmail = userEmail || "usuario@axcend.com";
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
@@ -107,14 +112,14 @@ function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       {/* User footer */}
       <div className="border-t border-[var(--border-default)] p-4">
         <div className="flex items-center gap-3">
-          <Avatar name="Usuário" size="sm" />
+          <Avatar name={displayName} size="sm" />
           {!collapsed && (
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-[var(--text-primary)]">
-                Usuário
+                {displayName}
               </p>
               <p className="truncate text-xs text-[var(--text-muted)]">
-                usuario@axcend.com
+                {displayEmail}
               </p>
             </div>
           )}

@@ -2,10 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback, Fragment } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Bell, Search, Sun, Moon, Menu, User, Settings, LogOut } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui";
+import { createBrowserClient } from "@/lib/supabase/client";
 
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -21,13 +22,18 @@ const routeLabels: Record<string, string> = {
 
 interface HeaderProps {
   onMenuClick: () => void;
+  userName?: string;
+  userEmail?: string;
 }
 
-function Header({ onMenuClick }: HeaderProps) {
+function Header({ onMenuClick, userName, userEmail }: HeaderProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const displayName = userName || userEmail || "Usuário";
 
   // Build breadcrumbs
   const segments = pathname.split("/").filter(Boolean);
@@ -55,6 +61,13 @@ function Header({ onMenuClick }: HeaderProps) {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  async function handleSignOut() {
+    const supabase = createBrowserClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-[var(--border-default)] bg-[var(--bg-surface)]/80 px-4 backdrop-blur-sm lg:px-6">
@@ -133,11 +146,21 @@ function Header({ onMenuClick }: HeaderProps) {
             className="rounded-lg p-1 hover:bg-[var(--bg-elevated)] transition-colors"
             aria-label="Menu do usuário"
           >
-            <Avatar name="Usuário" size="sm" />
+            <Avatar name={displayName} size="sm" />
           </button>
 
           {dropdownOpen && (
             <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] py-1 shadow-lg">
+              <div className="px-4 py-2 border-b border-[var(--border-default)]">
+                <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+                  {displayName}
+                </p>
+                {userEmail && (
+                  <p className="truncate text-xs text-[var(--text-muted)]">
+                    {userEmail}
+                  </p>
+                )}
+              </div>
               <Link
                 href="/settings"
                 onClick={() => setDropdownOpen(false)}
@@ -154,6 +177,7 @@ function Header({ onMenuClick }: HeaderProps) {
               </Link>
               <hr className="my-1 border-[var(--border-default)]" />
               <button
+                onClick={handleSignOut}
                 className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-[var(--bg-elevated)] transition-colors"
               >
                 <LogOut size={16} /> Sair

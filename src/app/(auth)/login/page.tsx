@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, useToast } from "@/components/ui";
 import { fadeIn } from "@/lib/motion";
-import { cn } from "@/lib/cn";
+import { createBrowserClient } from "@/lib/supabase/client";
 
 function GoogleIcon() {
   return (
@@ -31,10 +32,55 @@ function MicrosoftIcon() {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!email || !password) {
+      toast("Preencha email e senha.", "warning");
+      return;
+    }
+
+    setLoading(true);
+    const supabase = createBrowserClient();
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      toast(error.message === "Invalid login credentials"
+        ? "Email ou senha incorretos."
+        : error.message, "error");
+      setLoading(false);
+      return;
+    }
+
+    toast("Login realizado com sucesso!", "success");
+    router.push("/dashboard");
+    router.refresh();
+  }
+
+  async function handleOAuth(provider: "google" | "azure") {
+    const supabase = createBrowserClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/api/auth/callback`,
+      },
+    });
+    if (error) {
+      toast(error.message, "error");
+    }
+  }
 
   return (
     <motion.div
@@ -56,10 +102,7 @@ export default function LoginPage() {
         </div>
 
         {/* Form */}
-        <form
-          onSubmit={(e) => e.preventDefault()}
-          className="space-y-4"
-        >
+        <form onSubmit={handleLogin} className="space-y-4">
           <Input
             label="Email"
             type="email"
@@ -106,7 +149,7 @@ export default function LoginPage() {
             </Link>
           </div>
 
-          <Button className="w-full" size="lg">
+          <Button className="w-full" size="lg" loading={loading}>
             Entrar
           </Button>
         </form>
@@ -120,10 +163,22 @@ export default function LoginPage() {
 
         {/* SSO */}
         <div className="grid grid-cols-2 gap-3">
-          <Button variant="secondary" size="md" icon={<GoogleIcon />}>
+          <Button
+            variant="secondary"
+            size="md"
+            icon={<GoogleIcon />}
+            onClick={() => handleOAuth("google")}
+            type="button"
+          >
             Google
           </Button>
-          <Button variant="secondary" size="md" icon={<MicrosoftIcon />}>
+          <Button
+            variant="secondary"
+            size="md"
+            icon={<MicrosoftIcon />}
+            onClick={() => handleOAuth("azure")}
+            type="button"
+          >
             Microsoft
           </Button>
         </div>
