@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   DragDropContext,
   Droppable,
@@ -31,6 +31,10 @@ function formatCurrency(value: number): string {
 }
 
 function PipelineBoard({ stages, initialDeals }: PipelineBoardProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showLeftFade, setShowLeftFade] = useState(false);
+  const [showRightFade, setShowRightFade] = useState(true);
+
   const [dealsByStage, setDealsByStage] =
     useState<Record<string, DealCardData[]>>(initialDeals);
   const [selectedDeal, setSelectedDeal] = useState<DealCardData | null>(null);
@@ -143,10 +147,51 @@ function PipelineBoard({ stages, initialDeals }: PipelineBoardProps) {
     [],
   );
 
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+      }
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  const updateFades = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setShowLeftFade(el.scrollLeft > 0);
+    setShowRightFade(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    updateFades();
+    el.addEventListener("scroll", updateFades);
+    window.addEventListener("resize", updateFades);
+    return () => {
+      el.removeEventListener("scroll", updateFades);
+      window.removeEventListener("resize", updateFades);
+    };
+  }, [updateFades]);
+
   return (
     <>
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="relative">
+          {showLeftFade && (
+            <div className="pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-r from-[var(--bg-primary)] to-transparent" />
+          )}
+          {showRightFade && (
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-l from-[var(--bg-primary)] to-transparent" />
+          )}
+          <div ref={scrollRef} className="flex gap-4 overflow-x-auto scroll-smooth pb-4">
           {stages.map((stage) => {
             const deals = dealsByStage[stage.id] ?? [];
             const totalValue = deals.reduce((sum, d) => sum + d.value, 0);
@@ -215,6 +260,7 @@ function PipelineBoard({ stages, initialDeals }: PipelineBoardProps) {
               </div>
             );
           })}
+          </div>
         </div>
       </DragDropContext>
 

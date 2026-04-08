@@ -12,7 +12,7 @@ import {
   Puzzle,
   Bell,
   CreditCard,
-  BookOpen,
+  Shuffle,
   GripVertical,
   Plus,
   Upload,
@@ -28,6 +28,16 @@ import {
   Banknote,
   Download,
   TrendingUp,
+  RefreshCw,
+  Share2,
+  DollarSign,
+  FileQuestion,
+  MapPin,
+  Copy,
+  Pencil,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout";
 import { Card, Button, Badge, Input } from "@/components/ui";
@@ -44,7 +54,7 @@ type SettingsTab =
   | "integrations"
   | "notifications"
   | "subscription"
-  | "playbooks";
+  | "lead-distribution";
 
 interface TabItem {
   key: SettingsTab;
@@ -62,7 +72,7 @@ const TABS: TabItem[] = [
   { key: "integrations", label: "Integrações", icon: Puzzle },
   { key: "notifications", label: "Notificações", icon: Bell },
   { key: "subscription", label: "Assinatura", icon: CreditCard },
-  { key: "playbooks", label: "Playbooks", icon: BookOpen },
+  { key: "lead-distribution", label: "Distribuição de Leads", icon: Shuffle },
 ];
 
 // --- Company Profile Tab ---
@@ -464,6 +474,262 @@ function SubscriptionTab() {
   );
 }
 
+// --- Lead Distribution Tab ---
+
+interface DistributionRule {
+  id: string;
+  name: string;
+  description: string;
+  icon: typeof RefreshCw;
+  active: boolean;
+  priority: number;
+  lastRun: string;
+  leadsDistributed: number;
+}
+
+const DISTRIBUTION_RULES_DATA: DistributionRule[] = [
+  {
+    id: "1",
+    name: "Round Robin",
+    description: "Distribuição igualitária e sequencial entre todos os vendedores",
+    icon: RefreshCw,
+    active: true,
+    priority: 1,
+    lastRun: "Hoje, 14:32",
+    leadsDistributed: 142,
+  },
+  {
+    id: "2",
+    name: "Por Origem",
+    description: "Leads do Facebook Ads → Equipe A | Google Ads → Equipe B | Indicação → Vendedor Senior",
+    icon: Share2,
+    active: true,
+    priority: 2,
+    lastRun: "Hoje, 14:30",
+    leadsDistributed: 87,
+  },
+  {
+    id: "3",
+    name: "Por Valor Aproximado",
+    description: "Deals acima de R$ 50.000 → Vendedor Senior | Abaixo → Distribuição normal",
+    icon: DollarSign,
+    active: false,
+    priority: 3,
+    lastRun: "Ontem, 18:00",
+    leadsDistributed: 34,
+  },
+  {
+    id: "4",
+    name: "Por Resposta do Formulário",
+    description: "Se 'Tipo de Seguro' = 'Vida' → Especialista Vida | 'Saúde' → Especialista Saúde",
+    icon: FileQuestion,
+    active: false,
+    priority: 4,
+    lastRun: "07/04/2026",
+    leadsDistributed: 56,
+  },
+  {
+    id: "5",
+    name: "Por Capacidade",
+    description: "Vendedor com menos deals ativos recebe o próximo lead",
+    icon: BarChart3,
+    active: true,
+    priority: 5,
+    lastRun: "Hoje, 14:32",
+    leadsDistributed: 203,
+  },
+  {
+    id: "6",
+    name: "Por Região/Território",
+    description: "Leads de SP → Equipe SP | RJ → Equipe RJ | Outros → Pool geral",
+    icon: MapPin,
+    active: false,
+    priority: 6,
+    lastRun: "05/04/2026",
+    leadsDistributed: 45,
+  },
+  {
+    id: "7",
+    name: "Duplicação/Peso",
+    description: "Duplicar lead para supervisor quando valor > R$ 100.000",
+    icon: Copy,
+    active: false,
+    priority: 7,
+    lastRun: "03/04/2026",
+    leadsDistributed: 12,
+  },
+];
+
+interface SellerCapacity {
+  id: string;
+  name: string;
+  team: string;
+  activeDeals: number;
+  maxLimit: number;
+  weight: number;
+  status: "receiving" | "paused";
+}
+
+const SELLERS_CAPACITY: SellerCapacity[] = [
+  { id: "s1", name: "Ana Paula", team: "Equipe A", activeDeals: 12, maxLimit: 20, weight: 100, status: "receiving" },
+  { id: "s2", name: "Ricardo Souza", team: "Equipe A", activeDeals: 18, maxLimit: 20, weight: 100, status: "receiving" },
+  { id: "s3", name: "Carlos Lima", team: "Equipe B", activeDeals: 8, maxLimit: 20, weight: 150, status: "receiving" },
+  { id: "s4", name: "Juliana Mendes", team: "Equipe B", activeDeals: 15, maxLimit: 20, weight: 100, status: "paused" },
+  { id: "s5", name: "Thiago Santos", team: "Equipe C", activeDeals: 5, maxLimit: 20, weight: 75, status: "receiving" },
+];
+
+function LeadDistributionTab() {
+  const [autoDistribution, setAutoDistribution] = useState(true);
+  const [rules, setRules] = useState<DistributionRule[]>(DISTRIBUTION_RULES_DATA);
+
+  const priorityLabel = (p: number) => `${p}ª`;
+
+  const toggleRule = (id: string) => {
+    setRules((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, active: !r.active } : r)),
+    );
+  };
+
+  return (
+    <motion.div variants={fadeIn} initial="hidden" animate="visible" className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">Distribuição de Leads</h2>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            Configure regras automáticas para distribuir leads entre vendedores.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-[var(--text-secondary)]">Distribuição automática</span>
+          <button
+            onClick={() => setAutoDistribution(!autoDistribution)}
+            className={cn(
+              "relative h-6 w-11 rounded-full transition-colors",
+              autoDistribution ? "bg-orange-500" : "bg-neutral-700",
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform",
+                autoDistribution && "translate-x-5",
+              )}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* Rules */}
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-3">
+        {rules.map((rule) => {
+          const Icon = rule.icon;
+          return (
+            <motion.div key={rule.id} variants={staggerChild}>
+              <Card hoverable={false} className="space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-500/10">
+                      <Icon size={18} className="text-orange-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                          {rule.name}
+                        </h3>
+                        <Badge variant="default" size="sm">
+                          {priorityLabel(rule.priority)}
+                        </Badge>
+                        {rule.name === "Round Robin" && (
+                          <Badge variant="success" size="sm">
+                            Padrão
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                        {rule.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => toggleRule(rule.id)}
+                      className={cn(
+                        "relative h-6 w-11 shrink-0 rounded-full transition-colors",
+                        rule.active ? "bg-orange-500" : "bg-neutral-700",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform",
+                          rule.active && "translate-x-5",
+                        )}
+                      />
+                    </button>
+                    <button className="rounded-lg p-1.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]">
+                      <Pencil size={14} />
+                    </button>
+                    <button className="rounded-lg p-1.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-red-400">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 border-t border-[var(--border-default)] pt-3 text-xs text-[var(--text-muted)]">
+                  <span>Última execução: {rule.lastRun}</span>
+                  <span>{rule.leadsDistributed} leads distribuídos</span>
+                </div>
+              </Card>
+            </motion.div>
+          );
+        })}
+      </motion.div>
+
+      {/* Sellers Capacity Table */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">
+          Capacidade dos Vendedores
+        </h3>
+        <Card hoverable={false} className="overflow-hidden !p-0">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--border-default)] bg-[var(--bg-elevated)]">
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-secondary)]">Nome</th>
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-secondary)]">Equipe</th>
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-secondary)]">Deals Ativos</th>
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-secondary)]">Limite Máx</th>
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-secondary)]">Peso (%)</th>
+                <th className="px-4 py-3 text-left font-medium text-[var(--text-secondary)]">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SELLERS_CAPACITY.map((seller) => (
+                <tr
+                  key={seller.id}
+                  className="border-b border-[var(--border-subtle)] last:border-0"
+                >
+                  <td className="px-4 py-3 text-[var(--text-primary)]">{seller.name}</td>
+                  <td className="px-4 py-3 text-[var(--text-secondary)]">{seller.team}</td>
+                  <td className="px-4 py-3 text-[var(--text-primary)]">{seller.activeDeals}</td>
+                  <td className="px-4 py-3 text-[var(--text-primary)]">{seller.maxLimit}</td>
+                  <td className="px-4 py-3 text-[var(--text-primary)]">{seller.weight}%</td>
+                  <td className="px-4 py-3">
+                    <Badge
+                      variant={seller.status === "receiving" ? "success" : "warning"}
+                      size="sm"
+                    >
+                      {seller.status === "receiving" ? "Recebendo" : "Pausado"}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </div>
+    </motion.div>
+  );
+}
+
 // --- Placeholder Tab ---
 
 function PlaceholderTab({ label }: { label: string }) {
@@ -497,7 +763,7 @@ const TAB_COMPONENTS: Record<SettingsTab, () => React.JSX.Element> = {
   integrations: IntegrationsTab,
   notifications: () => <PlaceholderTab label="Notificações" />,
   subscription: SubscriptionTab,
-  playbooks: () => <PlaceholderTab label="Playbooks" />,
+  "lead-distribution": LeadDistributionTab,
 };
 
 export default function SettingsPage() {

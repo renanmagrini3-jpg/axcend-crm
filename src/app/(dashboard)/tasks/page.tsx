@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { Plus, Search, Filter } from "lucide-react";
+import { Plus, Search, Filter, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { PageContainer } from "@/components/layout";
 import { Button, Badge } from "@/components/ui";
 import { TaskList } from "@/components/data/TaskList";
+import { TaskCard } from "@/components/data/TaskCard";
 import { NewTaskModal } from "@/components/data/NewTaskModal";
 import { staggerContainer, staggerChild } from "@/lib/motion";
 import { cn } from "@/lib/cn";
@@ -176,7 +177,7 @@ const mockTasks: TaskCardData[] = [
 
 // --- Tab & Filter config ---
 
-type TabKey = "all" | "pending" | "today" | "overdue" | "completed";
+type TabKey = "all" | "pending" | "today" | "overdue" | "completed" | "calendar";
 
 interface Tab {
   key: TabKey;
@@ -189,6 +190,7 @@ const tabs: Tab[] = [
   { key: "today", label: "Hoje" },
   { key: "overdue", label: "Vencidas" },
   { key: "completed", label: "Realizadas" },
+  { key: "calendar", label: "Calendário" },
 ];
 
 function isToday(date: Date): boolean {
@@ -209,6 +211,8 @@ export default function TasksPage() {
   const [filterType, setFilterType] = useState<TaskType | "">("");
   const [filterPriority, setFilterPriority] = useState<Priority | "">("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [calendarDate, setCalendarDate] = useState(() => new Date());
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const handleToggleComplete = useCallback((id: string) => {
     setTasks((prev) =>
@@ -255,7 +259,156 @@ export default function TasksPage() {
     today: tasks.filter((t) => isToday(t.dueDate) && t.status !== "COMPLETED").length,
     overdue: tasks.filter((t) => t.status === "OVERDUE").length,
     completed: tasks.filter((t) => t.status === "COMPLETED").length,
+    calendar: tasks.length,
   }), [tasks]);
+
+  // Group tasks by day key (YYYY-MM-DD) for the calendar
+  const calendarTasks = useMemo(() => {
+    const map = new Map<string, TaskCardData[]>();
+    for (const task of tasks) {
+      const d = task.dueDate;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const arr = map.get(key) ?? [];
+      arr.push(task);
+      map.set(key, arr);
+    }
+    return map;
+  }, [tasks]);
+
+  // --- Inline Calendar Component ---
+  function TaskCalendar() {
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+    const today = new Date();
+
+    const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const monthNames = [
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+    ];
+    const dayHeaders = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+    const prevMonth = () => {
+      setCalendarDate(new Date(year, month - 1, 1));
+      setSelectedDay(null);
+    };
+    const nextMonth = () => {
+      setCalendarDate(new Date(year, month + 1, 1));
+      setSelectedDay(null);
+    };
+
+    const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+
+    const dayKey = (day: number) =>
+      `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+    const selectedDayTasks = selectedDay ? (calendarTasks.get(dayKey(selectedDay)) ?? []) : [];
+
+    return (
+      <motion.div variants={staggerChild} initial="hidden" animate="visible">
+        {/* Calendar card */}
+        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
+          {/* Header */}
+          <div className="mb-4 flex items-center justify-between">
+            <button
+              onClick={prevMonth}
+              className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] transition-colors"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+              {monthNames[month]} {year}
+            </h3>
+            <button
+              onClick={nextMonth}
+              className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] transition-colors"
+            >
+              <ChevronRight size={20} />
+            </button>
+          </div>
+
+          {/* Day headers */}
+          <div className="grid grid-cols-7 gap-1 mb-1">
+            {dayHeaders.map((dh) => (
+              <div key={dh} className="text-center text-xs font-medium text-[var(--text-muted)] py-1">
+                {dh}
+              </div>
+            ))}
+          </div>
+
+          {/* Day cells */}
+          <div className="grid grid-cols-7 gap-1">
+            {/* Empty cells for offset */}
+            {Array.from({ length: firstDay }).map((_, i) => (
+              <div key={`empty-${i}`} className="aspect-square" />
+            ))}
+
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1;
+              const key = dayKey(day);
+              const dayTasks = calendarTasks.get(key) ?? [];
+              const count = dayTasks.length;
+              const hasOverdue = dayTasks.some((t) => t.status === "OVERDUE");
+              const isTodayCell = isCurrentMonth && today.getDate() === day;
+              const isSelected = selectedDay === day;
+
+              return (
+                <button
+                  key={day}
+                  onClick={() => setSelectedDay(isSelected ? null : day)}
+                  className={cn(
+                    "relative flex flex-col items-center justify-center rounded-lg aspect-square text-sm transition-colors",
+                    isTodayCell && "ring-1 ring-orange-500",
+                    isSelected && "bg-orange-500/20 ring-1 ring-orange-500",
+                    !isSelected && count === 1 && "bg-orange-500/5",
+                    !isSelected && count === 2 && "bg-orange-500/10",
+                    !isSelected && count >= 3 && "bg-orange-500/15",
+                    !isSelected && count === 0 && "hover:bg-[var(--bg-elevated)]",
+                    !isSelected && count > 0 && "hover:bg-orange-500/20",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "text-xs font-medium",
+                      isTodayCell ? "text-orange-500" : "text-[var(--text-primary)]",
+                    )}
+                  >
+                    {day}
+                  </span>
+                  {count > 0 && (
+                    <span className="text-[10px] font-medium text-orange-500">
+                      {count}
+                    </span>
+                  )}
+                  {hasOverdue && (
+                    <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-red-500" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Selected day tasks */}
+        {selectedDay !== null && (
+          <div className="mt-4 space-y-3">
+            <h4 className="text-sm font-medium text-[var(--text-secondary)]">
+              Tarefas em {selectedDay} de {monthNames[month]}
+            </h4>
+            {selectedDayTasks.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)]">Nenhuma tarefa para este dia.</p>
+            ) : (
+              selectedDayTasks.map((task) => (
+                <TaskCard key={task.id} task={task} onToggleComplete={handleToggleComplete} />
+              ))
+            )}
+          </div>
+        )}
+      </motion.div>
+    );
+  }
 
   return (
     <PageContainer title="Tarefas" description="Gerencie suas atividades e compromissos">
@@ -352,8 +505,12 @@ export default function TasksPage() {
         ))}
       </motion.div>
 
-      {/* Task List */}
-      <TaskList tasks={filtered} onToggleComplete={handleToggleComplete} />
+      {/* Task List / Calendar */}
+      {activeTab === "calendar" ? (
+        <TaskCalendar />
+      ) : (
+        <TaskList tasks={filtered} onToggleComplete={handleToggleComplete} />
+      )}
 
       {/* New Task Modal */}
       <NewTaskModal open={modalOpen} onClose={() => setModalOpen(false)} />
