@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   DollarSign,
@@ -13,6 +13,9 @@ import {
   Phone,
   Mail,
   Users,
+  MessageSquare,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import {
   BarChart,
@@ -38,7 +41,7 @@ import { cn } from "@/lib/cn";
 
 // ─── Period selector ───────────────────────────────────────────
 
-type Period = "today" | "week" | "month" | "quarter" | "year" | "custom";
+type Period = "today" | "week" | "month" | "quarter" | "year";
 
 const periods: { value: Period; label: string }[] = [
   { value: "today", label: "Hoje" },
@@ -46,60 +49,51 @@ const periods: { value: Period; label: string }[] = [
   { value: "month", label: "Este Mês" },
   { value: "quarter", label: "Este Trimestre" },
   { value: "year", label: "Este Ano" },
-  { value: "custom", label: "Personalizado" },
 ];
 
-// ─── Mock Data ─────────────────────────────────────────────────
+// ─── Task type icon map ───────────────────────────────────────
 
-const revenueData = [
-  { month: "Jan", receita: 85000 },
-  { month: "Fev", receita: 92000 },
-  { month: "Mar", receita: 78000 },
-  { month: "Abr", receita: 110000 },
-  { month: "Mai", receita: 105000 },
-  { month: "Jun", receita: 127450 },
-];
+const taskIconMap: Record<string, typeof Phone> = {
+  CALL: Phone,
+  EMAIL: Mail,
+  MEETING: Users,
+  WHATSAPP: MessageSquare,
+  FOLLOW_UP: Phone,
+  PROPOSAL: FileText,
+  CUSTOM: CheckCircle,
+};
 
-const funnelData = [
-  { stage: "Prospecção", deals: 45, fill: "#F97316" },
-  { stage: "Qualificação", deals: 34, fill: "#FB923C" },
-  { stage: "Proposta", deals: 22, fill: "#FDBA74" },
-  { stage: "Negociação", deals: 15, fill: "#A3A3A3" },
-  { stage: "Fechamento", deals: 8, fill: "#737373" },
-];
+// ─── Types ────────────────────────────────────────────────────
 
-const wonLostData = [
-  { month: "Jan", ganhos: 12, perdidos: 5 },
-  { month: "Fev", ganhos: 15, perdidos: 7 },
-  { month: "Mar", ganhos: 10, perdidos: 8 },
-  { month: "Abr", ganhos: 18, perdidos: 4 },
-  { month: "Mai", ganhos: 20, perdidos: 6 },
-  { month: "Jun", ganhos: 16, perdidos: 5 },
-];
-
-const lossReasonsData = [
-  { name: "Preço", value: 30, fill: "#F97316" },
-  { name: "Concorrência", value: 25, fill: "#FB923C" },
-  { name: "Timing", value: 20, fill: "#FDBA74" },
-  { name: "Sem resposta", value: 15, fill: "#A3A3A3" },
-  { name: "Outro", value: 10, fill: "#525252" },
-];
-
-const todayTasks = [
-  { id: 1, title: "Ligar para João Silva", type: "Ligação", contact: "João Silva", time: "09:00", done: false, icon: Phone },
-  { id: 2, title: "Enviar proposta Acme Corp", type: "E-mail", contact: "Maria Souza", time: "10:30", done: false, icon: Mail },
-  { id: 3, title: "Follow-up Tech Solutions", type: "Ligação", contact: "Pedro Oliveira", time: "14:00", done: true, icon: Phone },
-  { id: 4, title: "Reunião com time comercial", type: "Reunião", contact: "Equipe", time: "15:00", done: false, icon: Users },
-  { id: 5, title: "Atualizar CRM deals Q2", type: "Tarefa", contact: "—", time: "17:00", done: false, icon: CheckCircle },
-];
-
-const recentDeals = [
-  { id: 1, name: "Acme Corp - Enterprise", value: 45000, stage: "Proposta", priority: "high" as const },
-  { id: 2, name: "Tech Solutions SaaS", value: 28000, stage: "Negociação", priority: "high" as const },
-  { id: 3, name: "StartupX Onboarding", value: 12000, stage: "Qualificação", priority: "medium" as const },
-  { id: 4, name: "Global Logistics CRM", value: 67000, stage: "Fechamento", priority: "high" as const },
-  { id: 5, name: "Retail Plus - Módulo", value: 8500, stage: "Prospecção", priority: "low" as const },
-];
+interface DashboardData {
+  stats: {
+    revenue: number;
+    dealsInPipeline: number;
+    conversionRate: number;
+    pendingTasks: number;
+  };
+  charts: {
+    revenue: { month: string; receita: number }[];
+    funnel: { stage: string; deals: number; fill: string }[];
+    wonLost: { month: string; ganhos: number; perdidos: number }[];
+    lossReasons: { name: string; value: number; fill: string }[];
+  };
+  todayTasks: {
+    id: string;
+    title: string;
+    type: string;
+    status: string;
+    time: string;
+    contact: string;
+  }[];
+  recentDeals: {
+    id: string;
+    name: string;
+    value: number;
+    stage: string;
+    priority: "high" | "medium" | "low";
+  }[];
+}
 
 // ─── Custom Tooltip ────────────────────────────────────────────
 
@@ -165,14 +159,92 @@ function getGreeting(): string {
   return "Boa noite";
 }
 
+// ─── CSV Export ────────────────────────────────────────────────
+
+function exportDashboardCSV(data: DashboardData) {
+  const lines: string[] = [];
+
+  // Stats
+  lines.push("=== Indicadores ===");
+  lines.push("Métrica,Valor");
+  lines.push(`Receita do Período,${data.stats.revenue.toFixed(2)}`);
+  lines.push(`Deals no Pipeline,${data.stats.dealsInPipeline}`);
+  lines.push(`Taxa de Conversão,${data.stats.conversionRate}%`);
+  lines.push(`Tarefas Pendentes,${data.stats.pendingTasks}`);
+  lines.push("");
+
+  // Revenue chart
+  lines.push("=== Receita Mensal ===");
+  lines.push("Mês,Receita");
+  for (const r of data.charts.revenue) {
+    lines.push(`${r.month},${r.receita.toFixed(2)}`);
+  }
+  lines.push("");
+
+  // Funnel
+  lines.push("=== Funil de Vendas ===");
+  lines.push("Etapa,Deals");
+  for (const f of data.charts.funnel) {
+    lines.push(`${f.stage},${f.deals}`);
+  }
+  lines.push("");
+
+  // Won vs Lost
+  lines.push("=== Ganhos vs Perdidos ===");
+  lines.push("Mês,Ganhos,Perdidos");
+  for (const w of data.charts.wonLost) {
+    lines.push(`${w.month},${w.ganhos},${w.perdidos}`);
+  }
+  lines.push("");
+
+  // Loss Reasons
+  lines.push("=== Motivos de Perda ===");
+  lines.push("Motivo,Quantidade");
+  for (const l of data.charts.lossReasons) {
+    lines.push(`${l.name},${l.value}`);
+  }
+  lines.push("");
+
+  // Recent Deals
+  lines.push("=== Deals Recentes ===");
+  lines.push("Nome,Valor,Etapa,Prioridade");
+  for (const d of data.recentDeals) {
+    lines.push(`"${d.name}",${d.value.toFixed(2)},${d.stage},${d.priority}`);
+  }
+
+  const csv = lines.join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `dashboard-relatorio-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 // ─── Page ──────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState<Period>("month");
   const [userName, setUserName] = useState("");
-  const [taskChecked, setTaskChecked] = useState<Record<number, boolean>>(
-    Object.fromEntries(todayTasks.map((t) => [t.id, t.done])),
-  );
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [taskChecked, setTaskChecked] = useState<Record<string, boolean>>({});
+
+  const fetchDashboard = useCallback(async (p: Period) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/dashboard?period=${p}`);
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+      }
+    } catch {
+      // keep previous data on error
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     async function loadUser() {
@@ -188,9 +260,28 @@ export default function DashboardPage() {
     loadUser();
   }, []);
 
-  function toggleTask(id: number) {
+  useEffect(() => {
+    fetchDashboard(period);
+  }, [period, fetchDashboard]);
+
+  function handlePeriodChange(p: Period) {
+    setPeriod(p);
+  }
+
+  function toggleTask(id: string) {
     setTaskChecked((prev) => ({ ...prev, [id]: !prev[id] }));
   }
+
+  // Fallback empty data
+  const stats = data?.stats ?? { revenue: 0, dealsInPipeline: 0, conversionRate: 0, pendingTasks: 0 };
+  const charts = data?.charts ?? {
+    revenue: [],
+    funnel: [],
+    wonLost: [],
+    lossReasons: [],
+  };
+  const todayTasks = data?.todayTasks ?? [];
+  const recentDeals = data?.recentDeals ?? [];
 
   return (
     <PageContainer title="Dashboard" description="Visão geral do desempenho comercial">
@@ -205,7 +296,7 @@ export default function DashboardPage() {
             {periods.map((p) => (
               <button
                 key={p.value}
-                onClick={() => setPeriod(p.value)}
+                onClick={() => handlePeriodChange(p.value)}
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                   period === p.value
@@ -218,12 +309,24 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          <button className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]">
+          <button
+            onClick={() => data && exportDashboardCSV(data)}
+            disabled={!data}
+            className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:opacity-50"
+          >
             <Download size={14} />
             Exportar Relatório
           </button>
         </div>
       </div>
+
+      {/* Loading indicator */}
+      {loading && (
+        <div className="mb-4 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+          <Loader2 size={14} className="animate-spin" />
+          Carregando dados...
+        </div>
+      )}
 
       {/* Stat Cards */}
       <motion.div
@@ -234,32 +337,30 @@ export default function DashboardPage() {
       >
         <StatCard
           icon={<DollarSign size={22} />}
-          label="Receita do Mês"
-          value={127450}
+          label="Receita do Período"
+          value={stats.revenue}
           prefix="R$ "
           decimals={2}
-          change={12.5}
           color="green"
         />
         <StatCard
           icon={<Target size={22} />}
           label="Deals no Pipeline"
-          value={34}
+          value={stats.dealsInPipeline}
           color="orange"
         />
         <StatCard
           icon={<TrendingUp size={22} />}
           label="Taxa de Conversão"
-          value={23.5}
+          value={stats.conversionRate}
           suffix="%"
           decimals={1}
-          change={3.2}
           color="blue"
         />
         <StatCard
           icon={<CheckCircle size={22} />}
           label="Tarefas Pendentes"
-          value={12}
+          value={stats.pendingTasks}
           color="yellow"
         />
       </motion.div>
@@ -274,7 +375,7 @@ export default function DashboardPage() {
         {/* Revenue Bar Chart */}
         <ChartCard title="Receita Mensal">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={revenueData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+            <BarChart data={charts.revenue} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
               <XAxis dataKey="month" tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
               <YAxis
@@ -290,7 +391,7 @@ export default function DashboardPage() {
         {/* Funnel Horizontal Bar */}
         <ChartCard title="Funil de Vendas">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={funnelData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+            <BarChart data={charts.funnel} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" horizontal={false} />
               <XAxis type="number" tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
               <YAxis
@@ -301,7 +402,7 @@ export default function DashboardPage() {
               />
               <Tooltip content={<CustomTooltip suffix=" deals" />} cursor={{ fill: "rgba(249,115,22,0.08)" }} />
               <Bar dataKey="deals" name="Deals" radius={[0, 4, 4, 0]}>
-                {funnelData.map((entry, index) => (
+                {charts.funnel.map((entry, index) => (
                   <Cell key={index} fill={entry.fill} />
                 ))}
               </Bar>
@@ -312,7 +413,7 @@ export default function DashboardPage() {
         {/* Won vs Lost Line Chart */}
         <ChartCard title="Ganhos vs Perdidos">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={wonLostData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+            <LineChart data={charts.wonLost} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
               <XAxis dataKey="month" tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
               <YAxis tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
@@ -349,25 +450,31 @@ export default function DashboardPage() {
         <ChartCard title="Motivos de Perda">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie
-                data={lossReasonsData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={100}
-                paddingAngle={3}
-                dataKey="value"
-                nameKey="name"
-                label={({ name, percent }: { name?: string; percent?: number }) =>
-                  `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`
-                }
-                labelLine={{ stroke: "var(--text-secondary)" }}
-              >
-                {lossReasonsData.map((entry, index) => (
-                  <Cell key={index} fill={entry.fill} />
-                ))}
-              </Pie>
-              <Tooltip content={<CustomTooltip suffix="%" />} />
+              {charts.lossReasons.length > 0 ? (
+                <Pie
+                  data={charts.lossReasons}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={3}
+                  dataKey="value"
+                  nameKey="name"
+                  label={({ name, percent }: { name?: string; percent?: number }) =>
+                    `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`
+                  }
+                  labelLine={{ stroke: "var(--text-secondary)" }}
+                >
+                  {charts.lossReasons.map((entry, index) => (
+                    <Cell key={index} fill={entry.fill} />
+                  ))}
+                </Pie>
+              ) : (
+                <text x="50%" y="50%" textAnchor="middle" fill="var(--text-secondary)" fontSize={14}>
+                  Sem dados de perda
+                </text>
+              )}
+              <Tooltip content={<CustomTooltip suffix=" deals" />} />
             </PieChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -392,8 +499,13 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex flex-col divide-y divide-[var(--border-default)]">
+              {todayTasks.length === 0 && (
+                <p className="py-4 text-center text-sm text-[var(--text-muted)]">
+                  Nenhuma tarefa para hoje
+                </p>
+              )}
               {todayTasks.map((task) => {
-                const Icon = task.icon;
+                const Icon = taskIconMap[task.type] || CheckCircle;
                 const checked = taskChecked[task.id] ?? false;
                 return (
                   <div
@@ -445,6 +557,11 @@ export default function DashboardPage() {
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">Deals Recentes</h3>
 
             <div className="flex flex-col divide-y divide-[var(--border-default)]">
+              {recentDeals.length === 0 && (
+                <p className="py-4 text-center text-sm text-[var(--text-muted)]">
+                  Nenhum deal encontrado
+                </p>
+              )}
               {recentDeals.map((deal) => {
                 const prio = priorityMap[deal.priority];
                 return (
@@ -461,7 +578,7 @@ export default function DashboardPage() {
 
                     <div className="flex shrink-0 items-center gap-3">
                       <span className="text-sm font-semibold text-[var(--text-primary)]">
-                        R$ {deal.value.toLocaleString("pt-BR")}
+                        R$ {deal.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </span>
                       <Badge variant={prio.variant} size="sm">
                         {prio.label}
