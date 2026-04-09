@@ -21,6 +21,8 @@ export interface StageData {
 export interface PipelineBoardProps {
   stages: StageData[];
   initialDeals: Record<string, DealCardData[]>;
+  onMoveDeal?: (dealId: string, stageId: string, lossReason?: string) => Promise<boolean>;
+  onDealClick?: (deal: DealCardData) => void;
 }
 
 function formatCurrency(value: number): string {
@@ -30,7 +32,7 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function PipelineBoard({ stages, initialDeals }: PipelineBoardProps) {
+function PipelineBoard({ stages, initialDeals, onMoveDeal, onDealClick }: PipelineBoardProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showLeftFade, setShowLeftFade] = useState(false);
   const [showRightFade, setShowRightFade] = useState(true);
@@ -50,6 +52,11 @@ function PipelineBoard({ stages, initialDeals }: PipelineBoardProps) {
     destId: string;
     destIndex: number;
   } | null>(null);
+
+  // Sync with parent when initialDeals changes
+  useEffect(() => {
+    setDealsByStage(initialDeals);
+  }, [initialDeals]);
 
   const isLostStage = useCallback(
     (stageId: string) => {
@@ -84,6 +91,25 @@ function PipelineBoard({ stages, initialDeals }: PipelineBoardProps) {
     [],
   );
 
+  const revertDeal = useCallback(
+    (
+      sourceId: string,
+      sourceIndex: number,
+      destId: string,
+      destIndex: number,
+    ) => {
+      // Revert: move from dest back to source
+      setDealsByStage((prev) => {
+        const destCopy = [...(prev[destId] ?? [])];
+        const sourceCopy = [...(prev[sourceId] ?? [])];
+        const [moved] = destCopy.splice(destIndex, 1);
+        sourceCopy.splice(sourceIndex, 0, moved);
+        return { ...prev, [sourceId]: sourceCopy, [destId]: destCopy };
+      });
+    },
+    [],
+  );
+
   const onDragEnd = useCallback(
     (result: DropResult) => {
       const { source, destination } = result;
@@ -110,17 +136,34 @@ function PipelineBoard({ stages, initialDeals }: PipelineBoardProps) {
         return;
       }
 
+      // Optimistic move
       moveDeal(
         source.droppableId,
         source.index,
         destination.droppableId,
         destination.index,
       );
+
+      // API call if stage changed
+      if (source.droppableId !== destination.droppableId && onMoveDeal) {
+        onMoveDeal(result.draggableId, destination.droppableId).then(
+          (success) => {
+            if (!success) {
+              revertDeal(
+                source.droppableId,
+                source.index,
+                destination.droppableId,
+                destination.index,
+              );
+            }
+          },
+        );
+      }
     },
-    [isLostStage, moveDeal],
+    [isLostStage, moveDeal, revertDeal, onMoveDeal],
   );
 
-  const confirmLoss = useCallback(() => {
+  const confirmLoss = useCallback(async () => {
     if (!pendingDrop) return;
     moveDeal(
       pendingDrop.sourceId,
@@ -128,10 +171,27 @@ function PipelineBoard({ stages, initialDeals }: PipelineBoardProps) {
       pendingDrop.destId,
       pendingDrop.destIndex,
     );
+
+    if (onMoveDeal) {
+      const success = await onMoveDeal(
+        pendingDrop.dealId,
+        pendingDrop.destId,
+        lossReason.trim(),
+      );
+      if (!success) {
+        revertDeal(
+          pendingDrop.sourceId,
+          pendingDrop.sourceIndex,
+          pendingDrop.destId,
+          pendingDrop.destIndex,
+        );
+      }
+    }
+
     setLossModalOpen(false);
     setLossReason("");
     setPendingDrop(null);
-  }, [pendingDrop, moveDeal]);
+  }, [pendingDrop, moveDeal, revertDeal, onMoveDeal, lossReason]);
 
   const cancelLoss = useCallback(() => {
     setLossModalOpen(false);
@@ -143,8 +203,9 @@ function PipelineBoard({ stages, initialDeals }: PipelineBoardProps) {
     (deal: DealCardData, stageName: string) => {
       setSelectedDeal(deal);
       setSelectedStageName(stageName);
+      onDealClick?.(deal);
     },
-    [],
+    [onDealClick],
   );
 
   useEffect(() => {

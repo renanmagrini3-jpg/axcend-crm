@@ -68,5 +68,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
+  // Create default pipeline with 7 stages
+  const { data: pipeline } = await supabase
+    .from("pipelines")
+    .insert({
+      name: "Pipeline Comercial",
+      organization_id: org.id,
+    })
+    .select()
+    .single();
+
+  if (pipeline) {
+    const defaultStages = [
+      { name: "Prospecção", order: 1 },
+      { name: "Agendamento", order: 2 },
+      { name: "Reunião", order: 3 },
+      { name: "Proposta", order: 4 },
+      { name: "Negociação", order: 5 },
+      { name: "Fechado Ganho", order: 6 },
+      { name: "Fechado Perdido", order: 7 },
+    ];
+
+    await supabase.from("pipeline_stages").insert(
+      defaultStages.map((s) => ({
+        name: s.name,
+        order: s.order,
+        pipeline_id: pipeline.id,
+      })),
+    );
+  }
+
   return NextResponse.json({ organization_id: org.id }, { status: 201 });
 }
