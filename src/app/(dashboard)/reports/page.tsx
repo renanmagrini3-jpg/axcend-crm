@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Users,
   UsersRound,
@@ -15,12 +15,15 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  ChevronDown,
+  Loader2,
+  Search,
+  Send,
+  X,
 } from "lucide-react";
 import {
   BarChart,
   Bar,
-  LineChart,
-  Line,
   PieChart,
   Pie,
   Cell,
@@ -40,9 +43,66 @@ import { ReportCard } from "@/components/data/ReportCard";
 import { staggerContainer, staggerChild } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 
-// ─── Period selector ───────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────
 
 type Period = "today" | "week" | "month" | "quarter" | "year" | "custom";
+
+type ReportType =
+  | "vendor-performance"
+  | "origin-conversion"
+  | "loss-reasons"
+  | "stage-conversion"
+  | "revenue-period"
+  | "response-time"
+  | "team-performance"
+  | "activities"
+  | "revenue-forecast";
+
+interface VendorRow {
+  name: string;
+  won: number;
+  lost: number;
+  total: number;
+  revenue: number;
+  conversao: number;
+}
+
+interface OriginRow {
+  name: string;
+  leads: number;
+  conversoes: number;
+  receita: number;
+  taxa: number;
+  fill: string;
+}
+
+interface LossRow {
+  name: string;
+  count: number;
+  percentual: number;
+  fill: string;
+}
+
+interface StageRow {
+  stage: string;
+  total: number;
+  convertidos: number;
+  taxa: number;
+}
+
+interface RevenueRow {
+  month: string;
+  receita: number;
+}
+
+type ReportData = VendorRow[] | OriginRow[] | LossRow[] | StageRow[] | RevenueRow[];
+
+interface ReportState {
+  loading: boolean;
+  data: ReportData | null;
+  error: string | null;
+  message?: string;
+}
 
 const periods: { value: Period; label: string }[] = [
   { value: "today", label: "Hoje" },
@@ -50,127 +110,85 @@ const periods: { value: Period; label: string }[] = [
   { value: "month", label: "Este Mês" },
   { value: "quarter", label: "Este Trimestre" },
   { value: "year", label: "Este Ano" },
-  { value: "custom", label: "Personalizado" },
 ];
 
-// ─── Pre-defined reports ──────────────────────────────────────
+// ─── Report definitions ──────────────────────────────────────
 
 interface ReportDef {
   icon: React.ReactNode;
   title: string;
   description: string;
   color: "orange" | "blue" | "green" | "yellow" | "purple" | "red";
+  apiType: ReportType;
 }
 
 const predefinedReports: ReportDef[] = [
   {
     icon: <Users size={22} />,
     title: "Performance por Vendedor",
-    description:
-      "Ranking de vendedores com deals ganhos, receita gerada e taxa de conversão individual.",
+    description: "Ranking de vendedores com deals ganhos, receita gerada e taxa de conversão individual.",
     color: "orange",
+    apiType: "vendor-performance",
   },
   {
     icon: <UsersRound size={22} />,
     title: "Performance por Equipe",
-    description:
-      "Métricas de desempenho agrupadas por equipe comercial com comparativo entre times.",
+    description: "Métricas de desempenho agrupadas por equipe comercial com comparativo entre times.",
     color: "blue",
+    apiType: "team-performance",
   },
   {
     icon: <GitBranch size={22} />,
     title: "Conversão por Etapa",
-    description:
-      "Quantidade de deals em cada etapa do funil e taxa de conversão entre as etapas.",
+    description: "Quantidade de deals em cada etapa do funil e taxa de conversão entre as etapas.",
     color: "green",
+    apiType: "stage-conversion",
   },
   {
     icon: <Share2 size={22} />,
     title: "Conversão por Origem",
-    description:
-      "Leads por origem (Facebook, Google, LinkedIn, Indicação, Orgânico) com taxa de conversão.",
+    description: "Leads por origem com taxa de conversão e receita gerada.",
     color: "purple",
+    apiType: "origin-conversion",
   },
   {
     icon: <Clock size={22} />,
     title: "Tempo Médio de Resposta",
-    description:
-      "Tempo entre o lead entrar e a primeira interação, detalhado por vendedor.",
+    description: "Tempo entre o lead entrar e a primeira interação, detalhado por vendedor.",
     color: "yellow",
+    apiType: "response-time",
   },
   {
     icon: <Timer size={22} />,
-    title: "Ciclo Médio de Venda",
-    description:
-      "Tempo médio desde a abertura do deal até o fechamento, por etapa e vendedor.",
+    title: "Motivos de Perda",
+    description: "Principais motivos de perda de deals com percentual e tendências.",
     color: "red",
+    apiType: "loss-reasons",
   },
   {
     icon: <DollarSign size={22} />,
     title: "Receita por Período",
-    description:
-      "Receita total e recorrente por mês, trimestre e ano com evolução temporal.",
+    description: "Receita total por mês nos últimos 12 meses com evolução temporal.",
     color: "green",
+    apiType: "revenue-period",
   },
   {
     icon: <BarChart3 size={22} />,
     title: "Atividades por Vendedor",
-    description:
-      "Ligações, e-mails, reuniões e tarefas realizadas por cada vendedor no período.",
+    description: "Ligações, e-mails, reuniões e tarefas realizadas por cada vendedor no período.",
     color: "blue",
+    apiType: "activities",
   },
   {
     icon: <TrendingUp size={22} />,
     title: "Previsão de Receita",
-    description:
-      "Forecast baseado no pipeline atual com probabilidade ponderada por etapa.",
+    description: "Forecast baseado no pipeline atual com probabilidade ponderada por etapa.",
     color: "orange",
+    apiType: "revenue-forecast",
   },
 ];
 
-// ─── Mock Chart Data ──────────────────────────────────────────
-
-const conversionByStageData = [
-  { stage: "Prospecção", total: 120, convertidos: 85, taxa: 70.8 },
-  { stage: "Qualificação", total: 85, convertidos: 58, taxa: 68.2 },
-  { stage: "Proposta", total: 58, convertidos: 38, taxa: 65.5 },
-  { stage: "Negociação", total: 38, convertidos: 22, taxa: 57.9 },
-  { stage: "Fechamento", total: 22, convertidos: 18, taxa: 81.8 },
-];
-
-const conversionBySourceData = [
-  { name: "Google Ads", leads: 340, convertidos: 52, fill: "#F97316" },
-  { name: "Facebook", leads: 280, convertidos: 36, fill: "#FB923C" },
-  { name: "LinkedIn", leads: 150, convertidos: 28, fill: "#FDBA74" },
-  { name: "Indicação", leads: 95, convertidos: 32, fill: "#10B981" },
-  { name: "Orgânico", leads: 210, convertidos: 25, fill: "#A3A3A3" },
-];
-
-const revenueByMonthData = [
-  { month: "Jan", receita: 85000, recorrente: 42000 },
-  { month: "Fev", receita: 92000, recorrente: 45000 },
-  { month: "Mar", receita: 78000, recorrente: 47000 },
-  { month: "Abr", receita: 110000, recorrente: 52000 },
-  { month: "Mai", receita: 105000, recorrente: 55000 },
-  { month: "Jun", receita: 127450, recorrente: 58000 },
-];
-
-const sellerPerformanceData = [
-  { name: "Ana Silva", ganhos: 24, receita: 285000, conversao: 32.4 },
-  { name: "Carlos Souza", ganhos: 19, receita: 210000, conversao: 28.1 },
-  { name: "Mariana Lima", ganhos: 17, receita: 195000, conversao: 26.5 },
-  { name: "Pedro Oliveira", ganhos: 15, receita: 178000, conversao: 24.8 },
-  { name: "Julia Santos", ganhos: 12, receita: 145000, conversao: 22.1 },
-];
-
-const activityByWeekData = [
-  { semana: "Sem 1", ligacoes: 45, emails: 120, reunioes: 12 },
-  { semana: "Sem 2", ligacoes: 52, emails: 98, reunioes: 15 },
-  { semana: "Sem 3", ligacoes: 38, emails: 110, reunioes: 10 },
-  { semana: "Sem 4", ligacoes: 60, emails: 135, reunioes: 18 },
-];
-
-// ─── Custom Tooltip ────────────────────────────────────────────
+// ─── Tooltip ──────────────────────────────────────────────────
 
 interface TooltipPayloadItem {
   name: string;
@@ -204,100 +222,541 @@ function CustomTooltip({ active, payload, label, currency, suffix }: CustomToolt
   );
 }
 
-// ─── Chart Card wrapper ────────────────────────────────────────
+// ─── Export CSV ────────────────────────────────────────────────
 
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <motion.div variants={staggerChild}>
-      <Card hoverable={false} className="flex flex-col gap-4">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
-        <div className="h-[280px] w-full">{children}</div>
-      </Card>
-    </motion.div>
-  );
+function exportCSV(data: ReportData, filename: string) {
+  if (!data || data.length === 0) return;
+
+  const headers = Object.keys(data[0]);
+  const csvRows = [
+    headers.join(";"),
+    ...data.map((row) =>
+      headers.map((h) => {
+        const val = (row as unknown as Record<string, unknown>)[h];
+        return typeof val === "number" ? String(val).replace(".", ",") : String(val ?? "");
+      }).join(";")
+    ),
+  ];
+
+  const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filename}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-// ─── Ranking Table ─────────────────────────────────────────────
+// ─── Expanded Report Renderers ────────────────────────────────
 
-function SellerRankingTable() {
+function VendorPerformanceReport({ data }: { data: VendorRow[] }) {
   return (
-    <motion.div variants={staggerChild}>
-      <Card hoverable={false} className="flex flex-col gap-4">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-          Ranking de Vendedores
-        </h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border-default)]">
-                <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">#</th>
-                <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">Vendedor</th>
-                <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Ganhos</th>
-                <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Receita</th>
-                <th className="pb-3 text-right text-xs font-medium text-[var(--text-secondary)]">Conversão</th>
+    <div className="flex flex-col gap-4">
+      <div className="h-[300px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+            <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} />
+            <YAxis tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v: string) => <span style={{ color: "var(--text-secondary)" }}>{v}</span>} />
+            <Bar dataKey="won" name="Ganhos" fill="#10B981" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="lost" name="Perdidos" fill="#EF4444" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border-default)]">
+              <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">#</th>
+              <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">Vendedor</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Ganhos</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Perdidos</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Receita</th>
+              <th className="pb-3 text-right text-xs font-medium text-[var(--text-secondary)]">Conversão</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row, i) => (
+              <tr key={row.name} className="border-b border-[var(--border-default)] last:border-0">
+                <td className="py-3 pr-4">
+                  <span className={cn(
+                    "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
+                    i === 0 ? "bg-orange-500/10 text-orange-500"
+                      : i === 1 ? "bg-neutral-400/10 text-neutral-400"
+                      : i === 2 ? "bg-amber-600/10 text-amber-600"
+                      : "bg-[var(--bg-elevated)] text-[var(--text-secondary)]",
+                  )}>{i + 1}</span>
+                </td>
+                <td className="py-3 pr-4 font-medium text-[var(--text-primary)]">{row.name}</td>
+                <td className="py-3 pr-4 text-right text-emerald-500">{row.won}</td>
+                <td className="py-3 pr-4 text-right text-red-500">{row.lost}</td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">
+                  R$ {row.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </td>
+                <td className="py-3 text-right">
+                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
+                    {row.conversao}%
+                  </span>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {sellerPerformanceData.map((seller, i) => (
-                <tr
-                  key={seller.name}
-                  className="border-b border-[var(--border-default)] last:border-0"
-                >
-                  <td className="py-3 pr-4">
-                    <span
-                      className={cn(
-                        "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
-                        i === 0
-                          ? "bg-orange-500/10 text-orange-500"
-                          : i === 1
-                            ? "bg-neutral-400/10 text-neutral-400"
-                            : i === 2
-                              ? "bg-amber-600/10 text-amber-600"
-                              : "bg-[var(--bg-elevated)] text-[var(--text-secondary)]",
-                      )}
-                    >
-                      {i + 1}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-4 font-medium text-[var(--text-primary)]">
-                    {seller.name}
-                  </td>
-                  <td className="py-3 pr-4 text-right text-[var(--text-primary)]">
-                    {seller.ganhos}
-                  </td>
-                  <td className="py-3 pr-4 text-right text-[var(--text-primary)]">
-                    R$ {seller.receita.toLocaleString("pt-BR")}
-                  </td>
-                  <td className="py-3 text-right">
-                    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
-                      {seller.conversao}%
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </motion.div>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
-// ─── Page ──────────────────────────────────────────────────────
+function OriginConversionReport({ data }: { data: OriginRow[] }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="leads"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={100}
+                label={(props: { name?: string; percent?: number }) =>
+                  `${props.name ?? ""} ${((props.percent ?? 0) * 100).toFixed(0)}%`
+                }
+                labelLine={{ stroke: "var(--text-secondary)" }}
+              >
+                {data.map((entry, i) => (
+                  <Cell key={i} fill={entry.fill} />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+              <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} />
+              <YAxis tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="leads" name="Leads" radius={[4, 4, 0, 0]}>
+                {data.map((entry, i) => (
+                  <Cell key={i} fill={entry.fill} />
+                ))}
+              </Bar>
+              <Bar dataKey="conversoes" name="Conversões" fill="#10B981" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border-default)]">
+              <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">Origem</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Leads</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Conversões</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Taxa</th>
+              <th className="pb-3 text-right text-xs font-medium text-[var(--text-secondary)]">Receita</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row) => (
+              <tr key={row.name} className="border-b border-[var(--border-default)] last:border-0">
+                <td className="py-3 pr-4 font-medium text-[var(--text-primary)]">
+                  <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.fill }} />
+                  {row.name}
+                </td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">{row.leads}</td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">{row.conversoes}</td>
+                <td className="py-3 pr-4 text-right">
+                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
+                    {row.taxa}%
+                  </span>
+                </td>
+                <td className="py-3 text-right text-[var(--text-primary)]">
+                  R$ {row.receita.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function LossReasonsReport({ data }: { data: LossRow[] }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="h-[300px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} layout="vertical" margin={{ top: 5, right: 20, left: 80, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+            <XAxis type="number" tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
+            <YAxis
+              type="category"
+              dataKey="name"
+              tick={{ fill: "var(--text-secondary)", fontSize: 11 }}
+              width={70}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Bar dataKey="count" name="Quantidade" radius={[0, 4, 4, 0]}>
+              {data.map((entry, i) => (
+                <Cell key={i} fill={entry.fill} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border-default)]">
+              <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">Motivo</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Quantidade</th>
+              <th className="pb-3 text-right text-xs font-medium text-[var(--text-secondary)]">Percentual</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row) => (
+              <tr key={row.name} className="border-b border-[var(--border-default)] last:border-0">
+                <td className="py-3 pr-4 font-medium text-[var(--text-primary)]">
+                  <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.fill }} />
+                  {row.name}
+                </td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">{row.count}</td>
+                <td className="py-3 text-right">
+                  <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-500">
+                    {row.percentual}%
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function RevenuePeriodReport({ data }: { data: RevenueRow[] }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="h-[300px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+            <defs>
+              <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+            <XAxis dataKey="month" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} />
+            <YAxis
+              tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
+              tickFormatter={(v: number) => `R$ ${(v / 1000).toFixed(0)}k`}
+            />
+            <Tooltip content={<CustomTooltip currency />} />
+            <Area
+              type="monotone"
+              dataKey="receita"
+              name="Receita"
+              stroke="#F97316"
+              strokeWidth={2}
+              fill="url(#revenueGrad)"
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border-default)]">
+              <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">Mês</th>
+              <th className="pb-3 text-right text-xs font-medium text-[var(--text-secondary)]">Receita</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row) => (
+              <tr key={row.month} className="border-b border-[var(--border-default)] last:border-0">
+                <td className="py-3 pr-4 font-medium text-[var(--text-primary)]">{row.month}</td>
+                <td className="py-3 text-right text-[var(--text-primary)]">
+                  R$ {row.receita.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function StageConversionReport({ data }: { data: StageRow[] }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="h-[300px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+            <XAxis dataKey="stage" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} />
+            <YAxis tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v: string) => <span style={{ color: "var(--text-secondary)" }}>{v}</span>} />
+            <Bar dataKey="total" name="Total" fill="#A3A3A3" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="convertidos" name="Convertidos" fill="#F97316" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border-default)]">
+              <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">Etapa</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Total</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Convertidos</th>
+              <th className="pb-3 text-right text-xs font-medium text-[var(--text-secondary)]">Taxa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row) => (
+              <tr key={row.stage} className="border-b border-[var(--border-default)] last:border-0">
+                <td className="py-3 pr-4 font-medium text-[var(--text-primary)]">{row.stage}</td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">{row.total}</td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">{row.convertidos}</td>
+                <td className="py-3 text-right">
+                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
+                    {row.taxa}%
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Smart Query Engine ───────────────────────────────────────
+
+interface DashboardData {
+  stats: {
+    revenue: number;
+    dealsInPipeline: number;
+    conversionRate: number;
+    pendingTasks: number;
+  };
+  charts: {
+    revenue: { month: string; receita: number }[];
+    funnel: { stage: string; deals: number }[];
+    wonLost: { month: string; ganhos: number; perdidos: number }[];
+    lossReasons: { name: string; value: number }[];
+  };
+  recentDeals: { name: string; value: number; stage: string }[];
+}
+
+function processSmartQuery(question: string, data: DashboardData): string {
+  const q = question.toLowerCase();
+
+  if (q.includes("receita") || q.includes("faturamento") || q.includes("revenue")) {
+    const total = data.stats.revenue;
+    const months = data.charts.revenue;
+    const best = months.reduce((a, b) => (b.receita > a.receita ? b : a), months[0]);
+    return `Sua receita no período atual é de R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}. ` +
+      (best ? `O melhor mês foi ${best.month} com R$ ${best.receita.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.` : "");
+  }
+
+  if (q.includes("deal") || q.includes("negóci") || q.includes("negoci") || q.includes("fechei") || q.includes("ganho")) {
+    const wonLost = data.charts.wonLost;
+    const totalWon = wonLost.reduce((s, m) => s + m.ganhos, 0);
+    const totalLost = wonLost.reduce((s, m) => s + m.perdidos, 0);
+    return `Nos últimos 6 meses: ${totalWon} deals ganhos e ${totalLost} perdidos. ` +
+      `Taxa de conversão atual: ${data.stats.conversionRate}%. ` +
+      `Deals ativos no pipeline: ${data.stats.dealsInPipeline}.`;
+  }
+
+  if (q.includes("vendedor") || q.includes("vendeu mais") || q.includes("melhor vendedor") || q.includes("ranking")) {
+    return "Para ver o ranking completo de vendedores, gere o relatório 'Performance por Vendedor' acima. " +
+      `Atualmente há ${data.stats.dealsInPipeline} deals ativos no pipeline com taxa de conversão de ${data.stats.conversionRate}%.`;
+  }
+
+  if (q.includes("perda") || q.includes("perdi") || q.includes("perdido") || q.includes("motivo")) {
+    const reasons = data.charts.lossReasons;
+    if (reasons.length === 0) return "Nenhum motivo de perda registrado no período.";
+    const top = reasons.slice(0, 3).map((r) => `${r.name} (${r.value})`).join(", ");
+    return `Principais motivos de perda: ${top}. Gere o relatório 'Motivos de Perda' para detalhes completos.`;
+  }
+
+  if (q.includes("pipeline") || q.includes("funil") || q.includes("etapa")) {
+    const funnel = data.charts.funnel;
+    if (funnel.length === 0) return "Nenhum dado de pipeline encontrado.";
+    const stages = funnel.map((s) => `${s.stage}: ${s.deals}`).join(", ");
+    return `Distribuição do funil — ${stages}. Total de ${data.stats.dealsInPipeline} deals ativos.`;
+  }
+
+  if (q.includes("tarefa") || q.includes("task") || q.includes("pendente")) {
+    return `Você tem ${data.stats.pendingTasks} tarefas pendentes no momento.`;
+  }
+
+  // Generic fallback
+  return `Resumo atual: Receita R$ ${data.stats.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}, ` +
+    `${data.stats.dealsInPipeline} deals no pipeline, conversão de ${data.stats.conversionRate}%, ` +
+    `${data.stats.pendingTasks} tarefas pendentes. Faça uma pergunta mais específica sobre receita, deals, vendedores, perdas ou pipeline.`;
+}
+
+// ─── Page ─────────────────────────────────────────────────────
 
 export default function ReportsPage() {
   const [period, setPeriod] = useState<Period>("month");
+  const [expandedReport, setExpandedReport] = useState<string | null>(null);
+  const [reports, setReports] = useState<Record<string, ReportState>>({});
+
+  // Smart query state
+  const [queryInput, setQueryInput] = useState("");
+  const [queryAnswer, setQueryAnswer] = useState<string | null>(null);
+  const [queryLoading, setQueryLoading] = useState(false);
+
+  const apiPeriod = period === "today" || period === "week" || period === "custom" ? "month" : period;
+
+  const fetchReport = useCallback(async (apiType: ReportType, title: string) => {
+    if (expandedReport === title) {
+      setExpandedReport(null);
+      return;
+    }
+
+    setExpandedReport(title);
+
+    // Already loaded
+    if (reports[title]?.data) return;
+
+    setReports((prev) => ({ ...prev, [title]: { loading: true, data: null, error: null } }));
+
+    try {
+      const res = await fetch(`/api/reports?type=${apiType}&period=${apiPeriod}`);
+      const json = await res.json();
+
+      if (!res.ok) {
+        setReports((prev) => ({ ...prev, [title]: { loading: false, data: null, error: json.error || "Erro ao carregar" } }));
+        return;
+      }
+
+      setReports((prev) => ({
+        ...prev,
+        [title]: {
+          loading: false,
+          data: json.data,
+          error: null,
+          message: json.message,
+        },
+      }));
+    } catch {
+      setReports((prev) => ({ ...prev, [title]: { loading: false, data: null, error: "Erro de conexão" } }));
+    }
+  }, [expandedReport, reports, apiPeriod]);
+
+  const handleSmartQuery = useCallback(async () => {
+    if (!queryInput.trim()) return;
+    setQueryLoading(true);
+    setQueryAnswer(null);
+
+    try {
+      const res = await fetch(`/api/dashboard?period=${apiPeriod}`);
+      const data = await res.json() as DashboardData;
+      const answer = processSmartQuery(queryInput, data);
+      setQueryAnswer(answer);
+    } catch {
+      setQueryAnswer("Erro ao buscar dados. Tente novamente.");
+    } finally {
+      setQueryLoading(false);
+    }
+  }, [queryInput, apiPeriod]);
+
+  const handleExportPDF = useCallback(() => {
+    window.print();
+  }, []);
+
+  const handleExportCSV = useCallback(() => {
+    if (!expandedReport || !reports[expandedReport]?.data) return;
+    const data = reports[expandedReport].data;
+    if (!data || data.length === 0) return;
+    exportCSV(data, expandedReport.replace(/ /g, "_").toLowerCase());
+  }, [expandedReport, reports]);
+
+  const renderExpandedReport = (apiType: ReportType, state: ReportState) => {
+    if (state.loading) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
+          <span className="ml-2 text-sm text-[var(--text-secondary)]">Carregando dados...</span>
+        </div>
+      );
+    }
+
+    if (state.error) {
+      return (
+        <div className="py-8 text-center text-sm text-red-500">{state.error}</div>
+      );
+    }
+
+    if (state.message || !state.data || state.data.length === 0) {
+      return (
+        <div className="py-8 text-center text-sm text-[var(--text-secondary)]">
+          {state.message || "Dados insuficientes para gerar este relatório. Adicione mais dados ao sistema."}
+        </div>
+      );
+    }
+
+    switch (apiType) {
+      case "vendor-performance":
+        return <VendorPerformanceReport data={state.data as VendorRow[]} />;
+      case "origin-conversion":
+        return <OriginConversionReport data={state.data as OriginRow[]} />;
+      case "loss-reasons":
+        return <LossReasonsReport data={state.data as LossRow[]} />;
+      case "stage-conversion":
+        return <StageConversionReport data={state.data as StageRow[]} />;
+      case "revenue-period":
+        return <RevenuePeriodReport data={state.data as RevenueRow[]} />;
+      default:
+        return (
+          <div className="py-8 text-center text-sm text-[var(--text-secondary)]">
+            Dados insuficientes para gerar este relatório. Adicione mais dados ao sistema.
+          </div>
+        );
+    }
+  };
 
   return (
     <PageContainer title="Relatórios" description="Análises detalhadas e relatórios do desempenho comercial">
+      {/* Print-optimized styles */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .print-area, .print-area * { visibility: visible; }
+          .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="no-print mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-1">
             {periods.map((p) => (
               <button
                 key={p.value}
-                onClick={() => setPeriod(p.value)}
+                onClick={() => {
+                  setPeriod(p.value);
+                  setReports({});
+                  setExpandedReport(null);
+                }}
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                   period === p.value
@@ -312,56 +771,72 @@ export default function ReportsPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" icon={<FileText size={14} />}>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<FileText size={14} />}
+            onClick={handleExportPDF}
+            disabled={!expandedReport}
+          >
             Exportar PDF
           </Button>
-          <Button variant="secondary" size="sm" icon={<FileSpreadsheet size={14} />}>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<FileSpreadsheet size={14} />}
+            onClick={handleExportCSV}
+            disabled={!expandedReport || !reports[expandedReport]?.data}
+          >
             Exportar Excel
           </Button>
         </div>
       </div>
 
-      {/* Stats Overview */}
-      <motion.div
-        variants={staggerContainer}
-        initial="hidden"
-        animate="visible"
-        className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
-      >
-        <StatCard
-          icon={<FileText size={22} />}
-          label="Relatórios Gerados"
-          value={48}
-          change={15.3}
-          color="orange"
-        />
-        <StatCard
-          icon={<TrendingUp size={22} />}
-          label="Taxa de Conversão Geral"
-          value={23.5}
-          suffix="%"
-          decimals={1}
-          change={3.2}
-          color="green"
-        />
-        <StatCard
-          icon={<Clock size={22} />}
-          label="Tempo Médio de Resposta"
-          value={2.4}
-          suffix="h"
-          decimals={1}
-          change={-12.5}
-          color="blue"
-        />
-        <StatCard
-          icon={<Timer size={22} />}
-          label="Ciclo Médio de Venda"
-          value={18}
-          suffix=" dias"
-          change={-8.2}
-          color="yellow"
-        />
-      </motion.div>
+      {/* Smart Query Section */}
+      <div className="no-print mb-6">
+        <Card hoverable={false} className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Search size={16} className="text-orange-500" />
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Consulta Inteligente</h3>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={queryInput}
+              onChange={(e) => setQueryInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSmartQuery()}
+              placeholder="Pergunte sobre seus dados... Ex: 'Qual minha receita?', 'Quantos deals fechei?'"
+              className="flex-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus:outline-none"
+            />
+            <Button
+              variant="primary"
+              size="sm"
+              icon={queryLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              onClick={handleSmartQuery}
+              disabled={queryLoading || !queryInput.trim()}
+            >
+              Consultar
+            </Button>
+          </div>
+          <AnimatePresence>
+            {queryAnswer && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="rounded-lg border border-orange-500/20 bg-orange-500/5 px-4 py-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm leading-relaxed text-[var(--text-primary)]">{queryAnswer}</p>
+                  <button onClick={() => setQueryAnswer(null)} className="mt-0.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+                    <X size={14} />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </Card>
+      </div>
 
       {/* Pre-defined Reports Grid */}
       <div className="mb-6">
@@ -375,175 +850,61 @@ export default function ReportsPage() {
           className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
         >
           {predefinedReports.map((report) => (
-            <ReportCard
-              key={report.title}
-              icon={report.icon}
-              title={report.title}
-              description={report.description}
-              color={report.color}
-            />
+            <div key={report.title}>
+              <ReportCard
+                icon={report.icon}
+                title={report.title}
+                description={report.description}
+                color={report.color}
+                onGenerate={() => fetchReport(report.apiType, report.title)}
+              />
+
+              {/* Expanded content */}
+              <AnimatePresence>
+                {expandedReport === report.title && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="print-area"
+                  >
+                    <Card hoverable={false} className="mt-2 flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                          {report.title}
+                        </h3>
+                        <div className="no-print flex items-center gap-2">
+                          {reports[report.title]?.data && reports[report.title].data!.length > 0 && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              icon={<Download size={14} />}
+                              onClick={() => {
+                                const data = reports[report.title]?.data;
+                                if (data) exportCSV(data, report.title.replace(/ /g, "_").toLowerCase());
+                              }}
+                            >
+                              CSV
+                            </Button>
+                          )}
+                          <button
+                            onClick={() => setExpandedReport(null)}
+                            className="text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                          >
+                            <ChevronDown size={16} className="rotate-180" />
+                          </button>
+                        </div>
+                      </div>
+                      {reports[report.title] && renderExpandedReport(report.apiType, reports[report.title])}
+                    </Card>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           ))}
         </motion.div>
       </div>
-
-      {/* Charts Section */}
-      <div className="mb-6">
-        <h2 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">
-          Visão Geral Analítica
-        </h2>
-
-        <motion.div
-          variants={staggerContainer}
-          initial="hidden"
-          animate="visible"
-          className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2"
-        >
-          {/* Conversion by Stage */}
-          <ChartCard title="Conversão por Etapa do Funil">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={conversionByStageData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-                <XAxis dataKey="stage" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} />
-                <YAxis tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend
-                  wrapperStyle={{ fontSize: 12 }}
-                  formatter={(value: string) => (
-                    <span style={{ color: "var(--text-secondary)" }}>{value}</span>
-                  )}
-                />
-                <Bar dataKey="total" name="Total" fill="#A3A3A3" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="convertidos" name="Convertidos" fill="#F97316" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-
-          {/* Revenue Evolution */}
-          <ChartCard title="Evolução da Receita">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueByMonthData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="recurringGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-                <XAxis dataKey="month" tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
-                <YAxis
-                  tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
-                  tickFormatter={(v: number) => `R$ ${(v / 1000).toFixed(0)}k`}
-                />
-                <Tooltip content={<CustomTooltip currency />} />
-                <Legend
-                  wrapperStyle={{ fontSize: 12 }}
-                  formatter={(value: string) => (
-                    <span style={{ color: "var(--text-secondary)" }}>{value}</span>
-                  )}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="receita"
-                  name="Receita Total"
-                  stroke="#F97316"
-                  strokeWidth={2}
-                  fill="url(#revenueGradient)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="recorrente"
-                  name="Receita Recorrente"
-                  stroke="#10B981"
-                  strokeWidth={2}
-                  fill="url(#recurringGradient)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </ChartCard>
-
-          {/* Conversion by Source */}
-          <ChartCard title="Leads e Conversão por Origem">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={conversionBySourceData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-                <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} />
-                <YAxis tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend
-                  wrapperStyle={{ fontSize: 12 }}
-                  formatter={(value: string) => (
-                    <span style={{ color: "var(--text-secondary)" }}>{value}</span>
-                  )}
-                />
-                <Bar dataKey="leads" name="Leads" radius={[4, 4, 0, 0]}>
-                  {conversionBySourceData.map((entry, index) => (
-                    <Cell key={index} fill={entry.fill} />
-                  ))}
-                </Bar>
-                <Bar dataKey="convertidos" name="Convertidos" fill="#10B981" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-
-          {/* Activity by Week */}
-          <ChartCard title="Atividades por Semana">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={activityByWeekData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-                <XAxis dataKey="semana" tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
-                <YAxis tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend
-                  wrapperStyle={{ fontSize: 12 }}
-                  formatter={(value: string) => (
-                    <span style={{ color: "var(--text-secondary)" }}>{value}</span>
-                  )}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="ligacoes"
-                  name="Ligações"
-                  stroke="#F97316"
-                  strokeWidth={2}
-                  dot={{ fill: "#F97316", r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="emails"
-                  name="E-mails"
-                  stroke="#3B82F6"
-                  strokeWidth={2}
-                  dot={{ fill: "#3B82F6", r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="reunioes"
-                  name="Reuniões"
-                  stroke="#10B981"
-                  strokeWidth={2}
-                  dot={{ fill: "#10B981", r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartCard>
-        </motion.div>
-      </div>
-
-      {/* Seller Ranking */}
-      <motion.div
-        variants={staggerContainer}
-        initial="hidden"
-        animate="visible"
-      >
-        <SellerRankingTable />
-      </motion.div>
     </PageContainer>
   );
 }
