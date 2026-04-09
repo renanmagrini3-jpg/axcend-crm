@@ -1,33 +1,44 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Plus, Upload, Download, Search } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  Plus,
+  Upload,
+  Download,
+  Search,
+  Trash2,
+  Pencil,
+  Users,
+} from "lucide-react";
 import { PageContainer } from "@/components/layout";
-import { Button, Badge } from "@/components/ui";
+import { Button, Badge, Modal, Input, useToast } from "@/components/ui";
 import { DataTable, type Column } from "@/components/data";
 
 // --- Types ---
 
-type LeadSource =
-  | "Facebook Ads"
-  | "Google Ads"
-  | "Indicação"
-  | "Orgânico"
-  | "LinkedIn";
-
 interface ContactRow {
   id: string;
   name: string;
-  email: string;
-  phone: string;
-  company: string;
-  source: LeadSource;
-  createdAt: Date;
+  email: string | null;
+  phone: string | null;
+  position: string | null;
+  origin: string | null;
+  company_id: string | null;
+  organization_id: string;
+  created_at: string;
+  companies: { id: string; name: string } | null;
 }
 
-// --- Badge variant map ---
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
 
-const sourceVariant: Record<LeadSource, "info" | "success" | "warning" | "default"> = {
+type OriginLabel = "Facebook Ads" | "Google Ads" | "Indicação" | "Orgânico" | "LinkedIn";
+
+const originVariant: Record<string, "info" | "success" | "warning" | "default"> = {
   "Facebook Ads": "info",
   "Google Ads": "warning",
   "Indicação": "success",
@@ -35,151 +46,402 @@ const sourceVariant: Record<LeadSource, "info" | "success" | "warning" | "defaul
   "LinkedIn": "info",
 };
 
-// --- Mock Data ---
-
-const mockContacts: ContactRow[] = [
-  {
-    id: "c1",
-    name: "João Mendes",
-    email: "joao.mendes@techcorp.com.br",
-    phone: "(11) 99812-3456",
-    company: "TechCorp",
-    source: "Google Ads",
-    createdAt: new Date("2026-03-15"),
-  },
-  {
-    id: "c2",
-    name: "Maria Lima",
-    email: "maria.lima@startupxyz.io",
-    phone: "(21) 98745-6789",
-    company: "StartupXYZ",
-    source: "LinkedIn",
-    createdAt: new Date("2026-03-20"),
-  },
-  {
-    id: "c3",
-    name: "Pedro Alves",
-    email: "pedro@globalind.com.br",
-    phone: "(11) 97632-1098",
-    company: "Global Ind.",
-    source: "Indicação",
-    createdAt: new Date("2026-02-28"),
-  },
-  {
-    id: "c4",
-    name: "Carla Rocha",
-    email: "carla.rocha@mediaplus.com",
-    phone: "(31) 99456-7890",
-    company: "MediaPlus",
-    source: "Facebook Ads",
-    createdAt: new Date("2026-03-05"),
-  },
-  {
-    id: "c5",
-    name: "Roberto Nunes",
-    email: "roberto.nunes@banconacional.com.br",
-    phone: "(11) 98123-4567",
-    company: "Banco Nacional",
-    source: "Orgânico",
-    createdAt: new Date("2026-01-18"),
-  },
-  {
-    id: "c6",
-    name: "Fernanda Costa",
-    email: "fernanda@logtech.com.br",
-    phone: "(41) 99234-5678",
-    company: "LogTech",
-    source: "Google Ads",
-    createdAt: new Date("2026-03-22"),
-  },
-  {
-    id: "c7",
-    name: "Lucas Ribeiro",
-    email: "lucas.ribeiro@edutech.com.br",
-    phone: "(51) 98765-4321",
-    company: "EduTech",
-    source: "LinkedIn",
-    createdAt: new Date("2026-02-10"),
-  },
-  {
-    id: "c8",
-    name: "Juliana Pires",
-    email: "juliana@fastretail.com.br",
-    phone: "(19) 99345-6789",
-    company: "FastRetail",
-    source: "Indicação",
-    createdAt: new Date("2026-03-28"),
-  },
-  {
-    id: "c9",
-    name: "André Santos",
-    email: "andre.santos@novadata.com.br",
-    phone: "(48) 99876-5432",
-    company: "NovaData",
-    source: "Facebook Ads",
-    createdAt: new Date("2026-04-01"),
-  },
-  {
-    id: "c10",
-    name: "Beatriz Oliveira",
-    email: "beatriz@solarenergy.com.br",
-    phone: "(62) 98654-3210",
-    company: "Solar Energy",
-    source: "Orgânico",
-    createdAt: new Date("2026-03-10"),
-  },
-];
-
-// --- Columns ---
-
-const columns: Column<ContactRow>[] = [
-  { key: "name", label: "Nome" },
-  { key: "email", label: "Email" },
-  { key: "phone", label: "Telefone", sortable: false },
-  { key: "company", label: "Empresa" },
-  {
-    key: "source",
-    label: "Origem",
-    render: (row) => (
-      <Badge variant={sourceVariant[row.source]} size="sm">
-        {row.source}
-      </Badge>
-    ),
-  },
-  {
-    key: "createdAt",
-    label: "Criado em",
-    render: (row) =>
-      row.createdAt.toLocaleDateString("pt-BR", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }),
-  },
+const ORIGINS: OriginLabel[] = [
+  "Facebook Ads",
+  "Google Ads",
+  "Indicação",
+  "Orgânico",
+  "LinkedIn",
 ];
 
 // --- Page ---
 
 export default function ContactsPage() {
+  const { toast } = useToast();
+  const [contacts, setContacts] = useState<ContactRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [pagination, setPagination] = useState<Pagination>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return mockContacts;
-    const q = search.toLowerCase();
-    return mockContacts.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q) ||
-        c.company.toLowerCase().includes(q),
+  // Modal states
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Form fields
+  const [formName, setFormName] = useState("");
+  const [formEmail, setFormEmail] = useState("");
+  const [formPhone, setFormPhone] = useState("");
+  const [formPosition, setFormPosition] = useState("");
+  const [formOrigin, setFormOrigin] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
+
+  const fetchContacts = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      page: pagination.page.toString(),
+      limit: pagination.limit.toString(),
+      search,
+    });
+
+    try {
+      const res = await fetch(`/api/contacts?${params}`);
+      const json = await res.json();
+
+      if (!res.ok) {
+        toast(json.error || "Erro ao carregar contatos", "error");
+        return;
+      }
+
+      setContacts(json.data);
+      setPagination(json.pagination);
+    } catch {
+      toast("Erro de conexão", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [pagination.page, pagination.limit, search, toast]);
+
+  useEffect(() => {
+    fetchContacts();
+  }, [fetchContacts]);
+
+  // Debounced search
+  const [searchInput, setSearchInput] = useState("");
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setSearch(searchInput);
+      setPagination((p) => ({ ...p, page: 1 }));
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
+
+  function resetForm() {
+    setFormName("");
+    setFormEmail("");
+    setFormPhone("");
+    setFormPosition("");
+    setFormOrigin("");
+    setEditId(null);
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!formName.trim()) {
+      toast("Nome é obrigatório", "warning");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formName,
+          email: formEmail || undefined,
+          phone: formPhone || undefined,
+          position: formPosition || undefined,
+          origin: formOrigin || undefined,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        toast(json.error || "Erro ao criar contato", "error");
+        return;
+      }
+
+      toast("Contato criado com sucesso!", "success");
+      setShowCreateModal(false);
+      resetForm();
+      fetchContacts();
+    } catch {
+      toast("Erro de conexão", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editId || !formName.trim()) return;
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/contacts/${editId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formName,
+          email: formEmail || null,
+          phone: formPhone || null,
+          position: formPosition || null,
+          origin: formOrigin || null,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        toast(json.error || "Erro ao atualizar contato", "error");
+        return;
+      }
+
+      toast("Contato atualizado!", "success");
+      setShowEditModal(false);
+      resetForm();
+      fetchContacts();
+    } catch {
+      toast("Erro de conexão", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!selectedId) return;
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/contacts/${selectedId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const json = await res.json();
+        toast(json.error || "Erro ao deletar contato", "error");
+        return;
+      }
+
+      toast("Contato removido", "success");
+      setShowDeleteConfirm(false);
+      setSelectedId(null);
+      fetchContacts();
+    } catch {
+      toast("Erro de conexão", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openEdit(contact: ContactRow) {
+    setEditId(contact.id);
+    setFormName(contact.name);
+    setFormEmail(contact.email || "");
+    setFormPhone(contact.phone || "");
+    setFormPosition(contact.position || "");
+    setFormOrigin(contact.origin || "");
+    setShowEditModal(true);
+  }
+
+  function handleExport() {
+    if (contacts.length === 0) {
+      toast("Nenhum contato para exportar", "warning");
+      return;
+    }
+
+    const headers = ["Nome", "Email", "Telefone", "Cargo", "Empresa", "Origem", "Criado em"];
+    const rows = contacts.map((c) => [
+      c.name,
+      c.email || "",
+      c.phone || "",
+      c.position || "",
+      c.companies?.name || "",
+      c.origin || "",
+      new Date(c.created_at).toLocaleDateString("pt-BR"),
+    ]);
+
+    const csv = [headers, ...rows].map((r) => r.map((v) => `"${v}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `contatos-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("CSV exportado!", "success");
+  }
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setSaving(true);
+    try {
+      const res = await fetch("/api/contacts/import", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        toast(json.error || "Erro ao importar CSV", "error");
+        return;
+      }
+
+      toast(`${json.imported} contato(s) importado(s)!`, "success");
+      fetchContacts();
+    } catch {
+      toast("Erro de conexão", "error");
+    } finally {
+      setSaving(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  // --- Columns ---
+  const columns: Column<ContactRow>[] = [
+    { key: "name" as keyof ContactRow, label: "Nome" },
+    {
+      key: "email" as keyof ContactRow,
+      label: "Email",
+      render: (row) => row.email || "—",
+    },
+    {
+      key: "phone" as keyof ContactRow,
+      label: "Telefone",
+      sortable: false,
+      render: (row) => row.phone || "—",
+    },
+    {
+      key: "companies" as keyof ContactRow,
+      label: "Empresa",
+      render: (row) => row.companies?.name || "—",
+    },
+    {
+      key: "origin" as keyof ContactRow,
+      label: "Origem",
+      render: (row) =>
+        row.origin ? (
+          <Badge
+            variant={originVariant[row.origin] || "default"}
+            size="sm"
+          >
+            {row.origin}
+          </Badge>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "created_at" as keyof ContactRow,
+      label: "Criado em",
+      render: (row) =>
+        new Date(row.created_at).toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        }),
+    },
+    {
+      key: "id" as keyof ContactRow,
+      label: "",
+      sortable: false,
+      render: (row) => (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              openEdit(row);
+            }}
+            className="rounded p-1 text-[var(--text-muted)] hover:text-orange-500 transition-colors"
+            title="Editar"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedId(row.id);
+              setShowDeleteConfirm(true);
+            }}
+            className="rounded p-1 text-[var(--text-muted)] hover:text-red-500 transition-colors"
+            title="Excluir"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  // --- Contact form fields (shared between create/edit) ---
+  function renderContactForm(onSubmit: (e: React.FormEvent) => void) {
+    return (
+      <form onSubmit={onSubmit} className="space-y-4">
+        <Input
+          label="Nome *"
+          value={formName}
+          onChange={(e) => setFormName(e.target.value)}
+        />
+        <Input
+          label="Email"
+          type="email"
+          value={formEmail}
+          onChange={(e) => setFormEmail(e.target.value)}
+        />
+        <Input
+          label="Telefone"
+          value={formPhone}
+          onChange={(e) => setFormPhone(e.target.value)}
+        />
+        <Input
+          label="Cargo"
+          value={formPosition}
+          onChange={(e) => setFormPosition(e.target.value)}
+        />
+        <div>
+          <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">
+            Origem
+          </label>
+          <select
+            value={formOrigin}
+            onChange={(e) => setFormOrigin(e.target.value)}
+            className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none transition-colors"
+          >
+            <option value="">Selecione...</option>
+            {ORIGINS.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex justify-end gap-3 pt-2">
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() => {
+              setShowCreateModal(false);
+              setShowEditModal(false);
+              resetForm();
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button type="submit" loading={saving}>
+            Salvar
+          </Button>
+        </div>
+      </form>
     );
-  }, [search]);
+  }
 
   return (
     <PageContainer title="Contatos" description="Gerencie sua base de contatos">
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {/* Search */}
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search
             size={16}
@@ -188,32 +450,166 @@ export default function ContactsPage() {
           <input
             type="text"
             placeholder="Buscar contato..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] pl-9 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--border-focus)] focus:outline-none transition-colors"
           />
         </div>
 
         <div className="flex-1" />
 
-        <Button variant="secondary" size="sm" icon={<Download size={14} />}>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Download size={14} />}
+          onClick={handleExport}
+        >
           Exportar
         </Button>
-        <Button variant="secondary" size="sm" icon={<Upload size={14} />}>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          onChange={handleImport}
+          className="hidden"
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Upload size={14} />}
+          onClick={() => fileInputRef.current?.click()}
+          loading={saving}
+        >
           Importar CSV
         </Button>
-        <Button variant="primary" size="sm" icon={<Plus size={16} />}>
+
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<Plus size={16} />}
+          onClick={() => {
+            resetForm();
+            setShowCreateModal(true);
+          }}
+        >
           Novo Contato
         </Button>
       </div>
 
-      {/* Table */}
-      <DataTable
-        columns={columns}
-        data={filtered}
-        onRowClick={(row) => setSelectedId(row.id === selectedId ? null : row.id)}
-        selectedId={selectedId}
-      />
+      {/* Table or empty state */}
+      {!loading && contacts.length === 0 && !search ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="mb-4 rounded-full bg-[var(--bg-elevated)] p-4">
+            <Users size={32} className="text-[var(--text-muted)]" />
+          </div>
+          <h3 className="text-lg font-semibold text-[var(--text-primary)]">
+            Nenhum contato ainda
+          </h3>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Crie seu primeiro contato!
+          </p>
+          <Button
+            className="mt-4"
+            icon={<Plus size={16} />}
+            onClick={() => {
+              resetForm();
+              setShowCreateModal(true);
+            }}
+          >
+            Novo Contato
+          </Button>
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={contacts}
+          onRowClick={(row) =>
+            setSelectedId(row.id === selectedId ? null : row.id)
+          }
+          selectedId={selectedId}
+          loading={loading}
+        />
+      )}
+
+      {/* Pagination */}
+      {pagination.totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between text-sm text-[var(--text-muted)]">
+          <span>
+            {pagination.total} contato(s) — Página {pagination.page} de{" "}
+            {pagination.totalPages}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={pagination.page <= 1}
+              onClick={() =>
+                setPagination((p) => ({ ...p, page: p.page - 1 }))
+              }
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={pagination.page >= pagination.totalPages}
+              onClick={() =>
+                setPagination((p) => ({ ...p, page: p.page + 1 }))
+              }
+            >
+              Próxima
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Create Modal */}
+      <Modal
+        open={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          resetForm();
+        }}
+        title="Novo Contato"
+      >
+        {renderContactForm(handleCreate)}
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal
+        open={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          resetForm();
+        }}
+        title="Editar Contato"
+      >
+        {renderContactForm(handleEdit)}
+      </Modal>
+
+      {/* Delete Confirmation */}
+      <Modal
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        title="Confirmar exclusão"
+      >
+        <p className="text-sm text-[var(--text-secondary)]">
+          Tem certeza que deseja excluir este contato? Esta ação não pode ser
+          desfeita.
+        </p>
+        <div className="mt-6 flex justify-end gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => setShowDeleteConfirm(false)}
+          >
+            Cancelar
+          </Button>
+          <Button variant="danger" onClick={handleDelete} loading={saving}>
+            Excluir
+          </Button>
+        </div>
+      </Modal>
     </PageContainer>
   );
 }

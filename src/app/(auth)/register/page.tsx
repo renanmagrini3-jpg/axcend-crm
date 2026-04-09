@@ -115,7 +115,7 @@ export default function RegisterPage() {
     setLoading(true);
     const supabase = createBrowserClient();
 
-    const { error } = await supabase.auth.signUp({
+    const { data: signUpData, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -132,6 +132,27 @@ export default function RegisterPage() {
       toast(error.message, "error");
       setLoading(false);
       return;
+    }
+
+    // Create organization and link to user
+    if (signUpData.session) {
+      try {
+        const res = await fetch("/api/organizations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: companyName,
+            mode: businessMode,
+          }),
+        });
+
+        if (!res.ok) {
+          const json = await res.json();
+          console.error("Failed to create organization:", json.error);
+        }
+      } catch (err) {
+        console.error("Failed to create organization:", err);
+      }
     }
 
     toast(
