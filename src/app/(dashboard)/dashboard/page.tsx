@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   DollarSign,
@@ -31,6 +31,7 @@ import {
 } from "recharts";
 import { PageContainer } from "@/components/layout";
 import { Card, Badge } from "@/components/ui";
+import { createBrowserClient } from "@/lib/supabase/client";
 import { StatCard } from "@/components/data/StatCard";
 import { staggerContainer, staggerChild, fadeInUp } from "@/lib/motion";
 import { cn } from "@/lib/cn";
@@ -141,7 +142,7 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
     <motion.div variants={staggerChild}>
       <Card hoverable={false} className="flex flex-col gap-4">
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
-        <div className="h-[280px] w-full">{children}</div>
+        <div className="h-[280px] w-full" style={{ userSelect: "none" }}>{children}</div>
       </Card>
     </motion.div>
   );
@@ -168,9 +169,24 @@ function getGreeting(): string {
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState<Period>("month");
+  const [userName, setUserName] = useState("");
   const [taskChecked, setTaskChecked] = useState<Record<number, boolean>>(
     Object.fromEntries(todayTasks.map((t) => [t.id, t.done])),
   );
+
+  useEffect(() => {
+    async function loadUser() {
+      const supabase = createBrowserClient();
+      const { data } = await supabase.auth.getUser();
+      if (data.user) {
+        setUserName(
+          (data.user.user_metadata?.full_name as string) ||
+            data.user.email?.split("@")[0] || "Usuário",
+        );
+      }
+    }
+    loadUser();
+  }, []);
 
   function toggleTask(id: number) {
     setTaskChecked((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -181,7 +197,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-lg text-[var(--text-secondary)]">
-          {getGreeting()}, <span className="font-semibold text-[var(--text-primary)]">Usuário</span>
+          {getGreeting()}, <span className="font-semibold text-[var(--text-primary)]">{userName || "Usuário"}</span>
         </p>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -265,7 +281,7 @@ export default function DashboardPage() {
                 tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
                 tickFormatter={(v: number) => `R$ ${(v / 1000).toFixed(0)}k`}
               />
-              <Tooltip content={<CustomTooltip currency />} />
+              <Tooltip content={<CustomTooltip currency />} cursor={{ fill: "rgba(249,115,22,0.08)" }} />
               <Bar dataKey="receita" name="Receita" fill="#F97316" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -283,7 +299,7 @@ export default function DashboardPage() {
                 tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
                 width={100}
               />
-              <Tooltip content={<CustomTooltip suffix=" deals" />} />
+              <Tooltip content={<CustomTooltip suffix=" deals" />} cursor={{ fill: "rgba(249,115,22,0.08)" }} />
               <Bar dataKey="deals" name="Deals" radius={[0, 4, 4, 0]}>
                 {funnelData.map((entry, index) => (
                   <Cell key={index} fill={entry.fill} />
@@ -300,7 +316,7 @@ export default function DashboardPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
               <XAxis dataKey="month" tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
               <YAxis tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
-              <Tooltip content={<CustomTooltip suffix=" deals" />} />
+              <Tooltip content={<CustomTooltip suffix=" deals" />} cursor={{ stroke: "rgba(249,115,22,0.3)", strokeWidth: 1 }} />
               <Legend
                 wrapperStyle={{ fontSize: 12 }}
                 formatter={(value: string) => (

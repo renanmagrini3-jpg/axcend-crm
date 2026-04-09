@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { Modal, Button } from "@/components/ui";
+import { useState, useEffect, type FormEvent } from "react";
+import { Modal, Button, useToast } from "@/components/ui";
 import type { TaskType, Priority } from "@/types";
 
 // --- Types ---
@@ -19,9 +19,10 @@ interface NewTaskFormData {
 interface NewTaskModalProps {
   open: boolean;
   onClose: () => void;
+  onCreated?: () => void;
 }
 
-// --- Mock options ---
+// --- Options ---
 
 const typeOptions: { value: TaskType; label: string }[] = [
   { value: "CALL", label: "Ligação" },
@@ -37,21 +38,6 @@ const priorityOptions: { value: Priority; label: string }[] = [
   { value: "HIGH", label: "Alta" },
   { value: "MEDIUM", label: "Média" },
   { value: "LOW", label: "Baixa" },
-];
-
-const contactOptions = [
-  { value: "c1", label: "Lucas Ferreira" },
-  { value: "c2", label: "Mariana Costa" },
-  { value: "c3", label: "Rafael Oliveira" },
-  { value: "c4", label: "Camila Santos" },
-  { value: "c5", label: "Pedro Almeida" },
-];
-
-const dealOptions = [
-  { value: "", label: "Nenhum" },
-  { value: "d1", label: "Implantação ERP — TechCorp" },
-  { value: "d2", label: "Licença Anual — StartupXYZ" },
-  { value: "d3", label: "Consultoria — Global Ind." },
 ];
 
 // --- Styles ---
@@ -73,18 +59,93 @@ const initialForm: NewTaskFormData = {
   notes: "",
 };
 
-function NewTaskModal({ open, onClose }: NewTaskModalProps) {
+function NewTaskModal({ open, onClose, onCreated }: NewTaskModalProps) {
+  const { toast } = useToast();
   const [form, setForm] = useState<NewTaskFormData>(initialForm);
+  const [saving, setSaving] = useState(false);
+  const [contacts, setContacts] = useState<{ id: string; name: string }[]>([]);
+  const [deals, setDeals] = useState<{ id: string; title: string }[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    async function loadOptions() {
+      try {
+        const [contactsRes, dealsRes] = await Promise.all([
+          fetch("/api/contacts?limit=100"),
+          fetch("/api/deals?limit=100"),
+        ]);
+        const contactsJson = await contactsRes.json();
+        const dealsJson = await dealsRes.json();
+
+        if (contactsRes.ok) {
+          setContacts(
+            (contactsJson.data ?? []).map((c: { id: string; name: string }) => ({
+              id: c.id,
+              name: c.name,
+            })),
+          );
+        }
+        if (dealsRes.ok) {
+          setDeals(
+            (dealsJson.data ?? []).map((d: { id: string; title: string }) => ({
+              id: d.id,
+              title: d.title,
+            })),
+          );
+        }
+      } catch {
+        /* ignore - selects will just be empty */
+      }
+    }
+    loadOptions();
+  }, [open]);
 
   function update<K extends keyof NewTaskFormData>(key: K, value: NewTaskFormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    // TODO: persist task via API
-    setForm(initialForm);
-    onClose();
+    if (!form.title.trim()) {
+      toast("Título é obrigatório", "warning");
+      return;
+    }
+    if (!form.dueDate) {
+      toast("Data é obrigatória", "warning");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: form.title,
+          type: form.type,
+          priority: form.priority,
+          due_at: new Date(form.dueDate).toISOString(),
+          contact_id: form.contactId || null,
+          deal_id: form.dealId || null,
+          notes: form.notes || null,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        toast(json.error || "Erro ao criar tarefa", "error");
+        return;
+      }
+
+      toast("Tarefa criada com sucesso!", "success");
+      setForm(initialForm);
+      onCreated?.();
+    } catch {
+      toast("Erro de conexão", "error");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleClose() {
@@ -97,7 +158,7 @@ function NewTaskModal({ open, onClose }: NewTaskModalProps) {
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Título */}
         <div>
-          <label className={labelClass}>Título</label>
+          <label className={labelClass}>Título *</label>
           <input
             type="text"
             required
@@ -142,7 +203,7 @@ function NewTaskModal({ open, onClose }: NewTaskModalProps) {
 
         {/* Data/Hora */}
         <div>
-          <label className={labelClass}>Data e Hora</label>
+          <label className={labelClass}>Data e Hora *</label>
           <input
             type="datetime-local"
             required
@@ -156,17 +217,14 @@ function NewTaskModal({ open, onClose }: NewTaskModalProps) {
         <div>
           <label className={labelClass}>Contato Vinculado</label>
           <select
-            required
             value={form.contactId}
             onChange={(e) => update("contactId", e.target.value)}
             className={selectClass}
           >
-            <option value="" disabled>
-              Selecione um contato
-            </option>
-            {contactOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
+            <option value="">Nenhum</option>
+            {contacts.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
               </option>
             ))}
           </select>
@@ -180,9 +238,10 @@ function NewTaskModal({ open, onClose }: NewTaskModalProps) {
             onChange={(e) => update("dealId", e.target.value)}
             className={selectClass}
           >
-            {dealOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
+            <option value="">Nenhum</option>
+            {deals.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.title}
               </option>
             ))}
           </select>
@@ -205,7 +264,7 @@ function NewTaskModal({ open, onClose }: NewTaskModalProps) {
           <Button type="button" variant="secondary" size="sm" onClick={handleClose}>
             Cancelar
           </Button>
-          <Button type="submit" variant="primary" size="sm">
+          <Button type="submit" variant="primary" size="sm" loading={saving}>
             Criar Tarefa
           </Button>
         </div>

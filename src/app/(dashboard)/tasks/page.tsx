@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Plus, Search, Filter, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { PageContainer } from "@/components/layout";
-import { Button, Badge } from "@/components/ui";
+import { Button, Badge, useToast } from "@/components/ui";
 import { TaskList } from "@/components/data/TaskList";
 import { TaskCard } from "@/components/data/TaskCard";
 import { NewTaskModal } from "@/components/data/NewTaskModal";
@@ -12,168 +12,6 @@ import { staggerContainer, staggerChild } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 import type { TaskType, Priority, TaskStatus } from "@/types";
 import type { TaskCardData } from "@/components/data/TaskCard";
-
-// --- Mock Data ---
-
-function d(offset: number, hour: number, minute: number): Date {
-  const date = new Date();
-  date.setDate(date.getDate() + offset);
-  date.setHours(hour, minute, 0, 0);
-  return date;
-}
-
-const mockTasks: TaskCardData[] = [
-  {
-    id: "t1",
-    title: "Ligar para confirmar reunião de discovery",
-    type: "CALL",
-    priority: "HIGH",
-    status: "OVERDUE",
-    dueDate: d(-2, 10, 0),
-    contactName: "Lucas Ferreira",
-    assignedTo: { name: "Ana Paula" },
-  },
-  {
-    id: "t2",
-    title: "Enviar proposta comercial atualizada",
-    type: "PROPOSAL",
-    priority: "HIGH",
-    status: "OVERDUE",
-    dueDate: d(-1, 14, 0),
-    contactName: "Mariana Costa",
-    assignedTo: { name: "Ricardo Souza" },
-  },
-  {
-    id: "t3",
-    title: "Follow-up após demonstração do produto",
-    type: "FOLLOW_UP",
-    priority: "HIGH",
-    status: "PENDING",
-    dueDate: d(0, 9, 0),
-    contactName: "Rafael Oliveira",
-    assignedTo: { name: "Ana Paula" },
-  },
-  {
-    id: "t4",
-    title: "Enviar material de onboarding por e-mail",
-    type: "EMAIL",
-    priority: "MEDIUM",
-    status: "PENDING",
-    dueDate: d(0, 11, 30),
-    contactName: "Camila Santos",
-    assignedTo: { name: "Ricardo Souza" },
-  },
-  {
-    id: "t5",
-    title: "Reunião de alinhamento com time técnico",
-    type: "MEETING",
-    priority: "HIGH",
-    status: "PENDING",
-    dueDate: d(0, 14, 30),
-    contactName: "Pedro Almeida",
-    assignedTo: { name: "Ana Paula" },
-  },
-  {
-    id: "t6",
-    title: "Mensagem de acompanhamento no WhatsApp",
-    type: "WHATSAPP",
-    priority: "MEDIUM",
-    status: "PENDING",
-    dueDate: d(0, 16, 0),
-    contactName: "Juliana Mendes",
-    assignedTo: { name: "Carlos Lima" },
-  },
-  {
-    id: "t7",
-    title: "Preparar apresentação de ROI",
-    type: "CUSTOM",
-    priority: "MEDIUM",
-    status: "PENDING",
-    dueDate: d(0, 17, 0),
-    contactName: "Thiago Nascimento",
-    assignedTo: { name: "Ricardo Souza" },
-  },
-  {
-    id: "t8",
-    title: "Ligar para negociar desconto de volume",
-    type: "CALL",
-    priority: "HIGH",
-    status: "PENDING",
-    dueDate: d(1, 9, 30),
-    contactName: "Fernanda Rocha",
-    assignedTo: { name: "Ana Paula" },
-  },
-  {
-    id: "t9",
-    title: "Enviar contrato para assinatura digital",
-    type: "EMAIL",
-    priority: "HIGH",
-    status: "PENDING",
-    dueDate: d(1, 11, 0),
-    contactName: "Bruno Carvalho",
-    assignedTo: { name: "Carlos Lima" },
-  },
-  {
-    id: "t10",
-    title: "Reunião de kickoff do projeto",
-    type: "MEETING",
-    priority: "MEDIUM",
-    status: "PENDING",
-    dueDate: d(2, 10, 0),
-    contactName: "Lucas Ferreira",
-    assignedTo: { name: "Ricardo Souza" },
-  },
-  {
-    id: "t11",
-    title: "WhatsApp de boas-vindas ao novo cliente",
-    type: "WHATSAPP",
-    priority: "LOW",
-    status: "PENDING",
-    dueDate: d(3, 9, 0),
-    contactName: "Amanda Vieira",
-    assignedTo: { name: "Ana Paula" },
-  },
-  {
-    id: "t12",
-    title: "Follow-up de proposta enviada",
-    type: "FOLLOW_UP",
-    priority: "MEDIUM",
-    status: "PENDING",
-    dueDate: d(4, 14, 0),
-    contactName: "Mariana Costa",
-    assignedTo: { name: "Carlos Lima" },
-  },
-  {
-    id: "t13",
-    title: "Enviar case de sucesso por e-mail",
-    type: "EMAIL",
-    priority: "LOW",
-    status: "COMPLETED",
-    dueDate: d(-1, 10, 0),
-    contactName: "Camila Santos",
-    assignedTo: { name: "Ricardo Souza" },
-  },
-  {
-    id: "t14",
-    title: "Ligação de qualificação de lead",
-    type: "CALL",
-    priority: "MEDIUM",
-    status: "COMPLETED",
-    dueDate: d(-1, 15, 0),
-    contactName: "Thiago Nascimento",
-    assignedTo: { name: "Ana Paula" },
-  },
-  {
-    id: "t15",
-    title: "Proposta de upsell para plano Enterprise",
-    type: "PROPOSAL",
-    priority: "HIGH",
-    status: "PENDING",
-    dueDate: d(6, 10, 0),
-    contactName: "Pedro Almeida",
-    assignedTo: { name: "Carlos Lima" },
-  },
-];
 
 // --- Tab & Filter config ---
 
@@ -202,10 +40,58 @@ function isToday(date: Date): boolean {
   );
 }
 
+function isPast(date: Date): boolean {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return dueDay < today;
+}
+
+// --- API row type ---
+
+interface TaskApiRow {
+  id: string;
+  title: string;
+  type: string;
+  priority: string;
+  status: string;
+  due_at: string;
+  completed_at: string | null;
+  contact_id: string | null;
+  deal_id: string | null;
+  assigned_to_id: string | null;
+  organization_id: string;
+  notes: string | null;
+  created_at: string;
+  contacts: { id: string; name: string } | null;
+}
+
+function apiToCard(row: TaskApiRow): TaskCardData {
+  const dueDate = new Date(row.due_at);
+  let status = row.status as TaskStatus;
+  // Auto-detect overdue
+  if (status === "PENDING" && isPast(dueDate)) {
+    status = "OVERDUE";
+  }
+
+  return {
+    id: row.id,
+    title: row.title,
+    type: row.type as TaskType,
+    priority: row.priority as Priority,
+    status,
+    dueDate,
+    contactName: row.contacts?.name || "—",
+    assignedTo: { name: "" },
+  };
+}
+
 // --- Page ---
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<TaskCardData[]>(mockTasks);
+  const { toast } = useToast();
+  const [tasks, setTasks] = useState<TaskCardData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [filterType, setFilterType] = useState<TaskType | "">("");
@@ -214,15 +100,70 @@ export default function TasksPage() {
   const [calendarDate, setCalendarDate] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
-  const handleToggleComplete = useCallback((id: string) => {
+  const fetchTasks = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/tasks?limit=100");
+      const json = await res.json();
+      if (!res.ok) {
+        toast(json.error || "Erro ao carregar tarefas", "error");
+        return;
+      }
+      const rows: TaskApiRow[] = json.data ?? [];
+      setTasks(rows.map(apiToCard));
+    } catch {
+      toast("Erro de conexão", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
+  const handleToggleComplete = useCallback(async (id: string) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+
+    const newStatus = task.status === "COMPLETED" ? "PENDING" : "COMPLETED";
+
+    // Optimistic update
     setTasks((prev) =>
       prev.map((t) =>
-        t.id === id
-          ? { ...t, status: t.status === "COMPLETED" ? ("PENDING" as TaskStatus) : ("COMPLETED" as TaskStatus) }
-          : t,
+        t.id === id ? { ...t, status: newStatus as TaskStatus } : t,
       ),
     );
-  }, []);
+
+    try {
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) {
+        // Revert on error
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === id ? { ...t, status: task.status } : t,
+          ),
+        );
+        toast("Erro ao atualizar tarefa", "error");
+      }
+    } catch {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === id ? { ...t, status: task.status } : t,
+        ),
+      );
+      toast("Erro de conexão", "error");
+    }
+  }, [tasks, toast]);
+
+  function handleTaskCreated() {
+    setModalOpen(false);
+    fetchTasks();
+  }
 
   const filtered = useMemo(() => {
     let result = tasks;
@@ -281,7 +222,7 @@ export default function TasksPage() {
     const month = calendarDate.getMonth();
     const today = new Date();
 
-    const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+    const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     const monthNames = [
@@ -308,9 +249,7 @@ export default function TasksPage() {
 
     return (
       <motion.div variants={staggerChild} initial="hidden" animate="visible">
-        {/* Calendar card */}
         <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
-          {/* Header */}
           <div className="mb-4 flex items-center justify-between">
             <button
               onClick={prevMonth}
@@ -329,7 +268,6 @@ export default function TasksPage() {
             </button>
           </div>
 
-          {/* Day headers */}
           <div className="grid grid-cols-7 gap-1 mb-1">
             {dayHeaders.map((dh) => (
               <div key={dh} className="text-center text-xs font-medium text-[var(--text-muted)] py-1">
@@ -338,9 +276,7 @@ export default function TasksPage() {
             ))}
           </div>
 
-          {/* Day cells */}
           <div className="grid grid-cols-7 gap-1">
-            {/* Empty cells for offset */}
             {Array.from({ length: firstDay }).map((_, i) => (
               <div key={`empty-${i}`} className="aspect-square" />
             ))}
@@ -391,7 +327,6 @@ export default function TasksPage() {
           </div>
         </div>
 
-        {/* Selected day tasks */}
         {selectedDay !== null && (
           <div className="mt-4 space-y-3">
             <h4 className="text-sm font-medium text-[var(--text-secondary)]">
@@ -414,7 +349,6 @@ export default function TasksPage() {
     <PageContainer title="Tarefas" description="Gerencie suas atividades e compromissos">
       {/* Header / Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {/* Search */}
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search
             size={16}
@@ -429,7 +363,6 @@ export default function TasksPage() {
           />
         </div>
 
-        {/* Filters */}
         <div className="flex items-center gap-2">
           <Filter size={16} className="text-[var(--text-muted)]" />
           <select
@@ -505,15 +438,19 @@ export default function TasksPage() {
         ))}
       </motion.div>
 
-      {/* Task List / Calendar */}
-      {activeTab === "calendar" ? (
+      {/* Loading state */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+        </div>
+      ) : activeTab === "calendar" ? (
         <TaskCalendar />
       ) : (
         <TaskList tasks={filtered} onToggleComplete={handleToggleComplete} />
       )}
 
       {/* New Task Modal */}
-      <NewTaskModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <NewTaskModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={handleTaskCreated} />
     </PageContainer>
   );
 }

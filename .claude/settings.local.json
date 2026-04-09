@@ -3,7 +3,33 @@
     "allow": [
       "Bash(claude mcp:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m ':*)"
+      "Bash(git commit -m ':*)",
+      "Bash(find src:*)",
+      "mcp__context7__resolve-library-id",
+      "Bash(npm install:*)",
+      "mcp__context7__query-docs",
+      "Bash(npx next:*)",
+      "Bash(git commit:*)",
+      "Bash(npm run:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/dashboard)",
+      "Bash(npx tsc:*)",
+      "mcp__prisma-local__migrate-dev",
+      "Bash(npx prisma:*)",
+      "Bash(export DATABASE_URL=\"postgres://postgres:postgres@localhost:51214/template1?sslmode=disable&connection_limit=10&connect_timeout=0\")",
+      "Bash(export DATABASE_URL=\"postgres://postgres:postgres@localhost:51214/template1?sslmode=disable\")",
+      "Bash(export DIRECT_DATABASE_URL=\"$DATABASE_URL\")",
+      "Bash(export DATABASE_URL=\"postgres://postgres:postgres@localhost:51214/template1?sslmode=disable&connect_timeout=30\")",
+      "Bash(export SHADOW_DATABASE_URL=\"postgres://postgres:postgres@localhost:51215/template1?sslmode=disable&connect_timeout=30\")",
+      "Bash(export SHADOW_DATABASE_URL=\"postgres://postgres:postgres@localhost:51215/template1?sslmode=disable\")",
+      "Bash(grep -v \"//\")",
+      "Bash(git status:*)",
+      "Bash(git:*)",
+      "Bash(ls -la /c/Users/Renan/axcend-crm/*.config.*)",
+      "Bash(npx eslint:*)",
+      "Bash(npm audit:*)",
+      "Bash(ls -d \"C:/Users/Renan/axcend-crm/src/components/\"*)",
+      "Bash(xargs wc:*)",
+      "Bash(gh:*)"
     ]
   }
 }
