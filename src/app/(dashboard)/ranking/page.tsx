@@ -5,16 +5,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Monitor,
   Trophy,
-  ArrowUp,
-  ArrowDown,
-  Minus,
   Medal,
   X,
   Zap,
   Target,
-  Clock,
   TrendingUp,
   Users,
+  Loader2,
+  BarChart3,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout";
 import { Card, Button, Avatar } from "@/components/ui";
@@ -27,15 +25,15 @@ type Period = "month" | "quarter" | "year";
 type Scope = "general" | "team";
 
 interface Seller {
-  id: number;
+  position: number;
+  id: string;
   name: string;
-  avatar?: string;
+  avatar: string | null;
   revenue: number;
   dealsWon: number;
+  dealsLost: number;
   conversionRate: number;
   tasksCompleted: number;
-  avgResponseTime: string;
-  positionChange: "up" | "down" | "same";
 }
 
 // ─── Period Options ───────────────────────────────────────────
@@ -44,21 +42,6 @@ const periods: { value: Period; label: string }[] = [
   { value: "month", label: "Este Mês" },
   { value: "quarter", label: "Este Trimestre" },
   { value: "year", label: "Este Ano" },
-];
-
-// ─── Mock Data ────────────────────────────────────────────────
-
-const sellers: Seller[] = [
-  { id: 1, name: "Ana Carolina Silva", revenue: 342500, dealsWon: 28, conversionRate: 38.2, tasksCompleted: 156, avgResponseTime: "1h 12min", positionChange: "up" },
-  { id: 2, name: "Carlos Eduardo Souza", revenue: 298000, dealsWon: 24, conversionRate: 34.5, tasksCompleted: 142, avgResponseTime: "1h 35min", positionChange: "same" },
-  { id: 3, name: "Mariana Lima Santos", revenue: 275800, dealsWon: 22, conversionRate: 31.8, tasksCompleted: 138, avgResponseTime: "2h 05min", positionChange: "up" },
-  { id: 4, name: "Pedro Henrique Oliveira", revenue: 248300, dealsWon: 19, conversionRate: 29.4, tasksCompleted: 125, avgResponseTime: "1h 48min", positionChange: "down" },
-  { id: 5, name: "Juliana Costa Ferreira", revenue: 221000, dealsWon: 17, conversionRate: 27.1, tasksCompleted: 118, avgResponseTime: "2h 22min", positionChange: "up" },
-  { id: 6, name: "Rafael Mendes Almeida", revenue: 198500, dealsWon: 15, conversionRate: 24.8, tasksCompleted: 110, avgResponseTime: "2h 40min", positionChange: "down" },
-  { id: 7, name: "Beatriz Rocha Nunes", revenue: 178200, dealsWon: 14, conversionRate: 22.5, tasksCompleted: 102, avgResponseTime: "1h 55min", positionChange: "same" },
-  { id: 8, name: "Lucas Barbosa Pinto", revenue: 156800, dealsWon: 12, conversionRate: 20.3, tasksCompleted: 95, avgResponseTime: "3h 10min", positionChange: "down" },
-  { id: 9, name: "Fernanda Dias Moreira", revenue: 142500, dealsWon: 11, conversionRate: 18.7, tasksCompleted: 88, avgResponseTime: "2h 50min", positionChange: "up" },
-  { id: 10, name: "Thiago Nascimento Reis", revenue: 128000, dealsWon: 9, conversionRate: 16.2, tasksCompleted: 76, avgResponseTime: "3h 25min", positionChange: "same" },
 ];
 
 // ─── Podium Card ──────────────────────────────────────────────
@@ -143,18 +126,6 @@ function PodiumCard({
   );
 }
 
-// ─── Position Change Icon ─────────────────────────────────────
-
-function PositionChangeIcon({ change }: { change: Seller["positionChange"] }) {
-  if (change === "up") {
-    return <ArrowUp className="h-4 w-4 text-emerald-500" />;
-  }
-  if (change === "down") {
-    return <ArrowDown className="h-4 w-4 text-red-500" />;
-  }
-  return <Minus className="h-4 w-4 text-neutral-500" />;
-}
-
 // ─── Ranking Row Backgrounds ──────────────────────────────────
 
 function getRowBg(index: number): string {
@@ -228,12 +199,71 @@ function LiveBadge() {
   );
 }
 
+// ─── Empty State ──────────────────────────────────────────────
+
+function EmptyState({ tvMode }: { tvMode: boolean }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-4 py-20">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-500/10">
+        <BarChart3 className="h-8 w-8 text-orange-500" />
+      </div>
+      <h3 className={cn(
+        "font-semibold text-[var(--text-primary)]",
+        tvMode ? "text-2xl" : "text-lg",
+      )}>
+        Nenhum dado de ranking
+      </h3>
+      <p className={cn(
+        "max-w-md text-center text-[var(--text-secondary)]",
+        tvMode ? "text-base" : "text-sm",
+      )}>
+        Adicione vendedores e feche deals para ver o ranking
+      </p>
+    </div>
+  );
+}
+
+// ─── Loading State ────────────────────────────────────────────
+
+function LoadingState() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-4 py-20">
+      <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+      <p className="text-sm text-[var(--text-secondary)]">Carregando ranking...</p>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────
 
 export default function RankingPage() {
   const [period, setPeriod] = useState<Period>("month");
   const [scope, setScope] = useState<Scope>("general");
   const [tvMode, setTvMode] = useState(false);
+  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch ranking data
+  const fetchRanking = useCallback(async (p: Period) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/ranking?period=${p}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSellers(data);
+      } else {
+        setSellers([]);
+      }
+    } catch {
+      setSellers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRanking(period);
+  }, [period, fetchRanking]);
 
   // Exit TV mode on ESC
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -247,21 +277,203 @@ export default function RankingPage() {
     }
   }, [tvMode, handleKeyDown]);
 
-  // Top 3 for podium (reorder: 2nd, 1st, 3rd)
+  // Period change handler
+  const handlePeriodChange = (p: Period) => {
+    setPeriod(p);
+  };
+
+  // Top 3 for podium
   const top3 = sellers.slice(0, 3);
 
   // Metric highlights
-  const bestRevenue = sellers[0];
-  const mostDeals = [...sellers].sort((a, b) => b.dealsWon - a.dealsWon)[0];
-  const fastestResponse = [...sellers].sort((a, b) => {
-    const parseTime = (t: string) => {
-      const hours = parseInt(t.match(/(\d+)h/)?.[1] ?? "0");
-      const mins = parseInt(t.match(/(\d+)min/)?.[1] ?? "0");
-      return hours * 60 + mins;
-    };
-    return parseTime(a.avgResponseTime) - parseTime(b.avgResponseTime);
-  })[0];
-  const bestConversion = [...sellers].sort((a, b) => b.conversionRate - a.conversionRate)[0];
+  const bestRevenue = sellers.length > 0 ? sellers[0] : null;
+  const mostDeals = sellers.length > 0
+    ? [...sellers].sort((a, b) => b.dealsWon - a.dealsWon)[0]
+    : null;
+  const bestConversion = sellers.length > 0
+    ? [...sellers].sort((a, b) => b.conversionRate - a.conversionRate)[0]
+    : null;
+  const mostTasks = sellers.length > 0
+    ? [...sellers].sort((a, b) => b.tasksCompleted - a.tasksCompleted)[0]
+    : null;
+
+  // ─── Shared Content ──────────────────────────────────────────
+
+  const renderPodium = (isTv: boolean) => {
+    if (top3.length === 0) return null;
+
+    // Handle fewer than 3 sellers
+    if (top3.length === 1) {
+      return (
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+          className="mb-6 flex justify-center"
+        >
+          <div className="w-full max-w-sm">
+            <PodiumCard seller={top3[0]} position={1} tvMode={isTv} />
+          </div>
+        </motion.div>
+      );
+    }
+
+    if (top3.length === 2) {
+      return (
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+          className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2"
+        >
+          <PodiumCard seller={top3[0]} position={1} tvMode={isTv} />
+          <PodiumCard seller={top3[1]} position={2} tvMode={isTv} />
+        </motion.div>
+      );
+    }
+
+    return (
+      <motion.div
+        variants={staggerContainer}
+        initial="hidden"
+        animate="visible"
+        className={cn("mb-6 grid grid-cols-1 gap-4 md:grid-cols-3", isTv && "mb-8 gap-6")}
+      >
+        <PodiumCard seller={top3[1]} position={2} tvMode={isTv} />
+        <PodiumCard seller={top3[0]} position={1} tvMode={isTv} />
+        <PodiumCard seller={top3[2]} position={3} tvMode={isTv} />
+      </motion.div>
+    );
+  };
+
+  const renderTable = (isTv: boolean) => {
+    if (sellers.length === 0) return null;
+
+    return (
+      <Card hoverable={false} className={cn("flex flex-col gap-4", isTv && "mb-8")}>
+        {!isTv && (
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+            Ranking Completo
+          </h3>
+        )}
+        <div className="overflow-x-auto">
+          <table className={cn("w-full text-left", isTv ? "text-base" : "text-sm")}>
+            <thead>
+              <tr className="border-b border-[var(--border-default)]">
+                <th className={cn("pb-3 pr-4 font-medium text-[var(--text-secondary)]", isTv ? "text-sm" : "text-xs")}>#</th>
+                <th className={cn("pb-3 pr-4 font-medium text-[var(--text-secondary)]", isTv ? "text-sm" : "text-xs")}>Vendedor</th>
+                <th className={cn("pb-3 pr-4 text-right font-medium text-[var(--text-secondary)]", isTv ? "text-sm" : "text-xs")}>Deals Ganhos</th>
+                <th className={cn("pb-3 pr-4 text-right font-medium text-[var(--text-secondary)]", isTv ? "text-sm" : "text-xs")}>Receita</th>
+                <th className={cn("pb-3 pr-4 text-right font-medium text-[var(--text-secondary)]", isTv ? "text-sm" : "text-xs")}>Conversão</th>
+                <th className={cn("pb-3 text-right font-medium text-[var(--text-secondary)]", isTv ? "text-sm" : "text-xs")}>Tarefas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sellers.map((seller, i) => (
+                <tr
+                  key={seller.id}
+                  className={cn(
+                    "border-b border-[var(--border-default)] last:border-0",
+                    getRowBg(i),
+                  )}
+                >
+                  <td className="py-3 pr-4">
+                    <span
+                      className={cn(
+                        "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
+                        i === 0
+                          ? "bg-orange-500/10 text-orange-500"
+                          : i === 1
+                            ? "bg-neutral-400/10 text-neutral-400"
+                            : i === 2
+                              ? "bg-amber-600/10 text-amber-600"
+                              : "bg-[var(--bg-elevated)] text-[var(--text-secondary)]",
+                      )}
+                    >
+                      {i + 1}
+                    </span>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={seller.name} size={isTv ? "md" : "sm"} />
+                      <span className={cn("font-medium text-[var(--text-primary)]", isTv && "text-base")}>
+                        {seller.name}
+                      </span>
+                    </div>
+                  </td>
+                  <td className={cn("py-3 pr-4 text-right text-[var(--text-primary)]", isTv && "text-base")}>
+                    {seller.dealsWon}
+                  </td>
+                  <td className={cn("py-3 pr-4 text-right font-medium text-[var(--text-primary)]", isTv && "text-base")}>
+                    R$ {seller.revenue.toLocaleString("pt-BR")}
+                  </td>
+                  <td className="py-3 pr-4 text-right">
+                    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
+                      {seller.conversionRate}%
+                    </span>
+                  </td>
+                  <td className={cn("py-3 text-right text-[var(--text-primary)]", isTv && "text-base")}>
+                    {seller.tasksCompleted}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    );
+  };
+
+  const renderMetrics = (isTv: boolean) => {
+    if (!bestRevenue) return null;
+
+    return (
+      <motion.div
+        variants={staggerContainer}
+        initial="hidden"
+        animate="visible"
+        className={cn(
+          "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4",
+          isTv && "gap-6",
+        )}
+      >
+        <MetricCard
+          icon={<Zap className="h-5 w-5 text-orange-500" />}
+          title="Maior Receita"
+          value={`R$ ${bestRevenue.revenue.toLocaleString("pt-BR")}`}
+          sellerName={bestRevenue.name}
+          tvMode={isTv}
+        />
+        {mostDeals && (
+          <MetricCard
+            icon={<Target className="h-5 w-5 text-emerald-500" />}
+            title="Mais Deals Fechados"
+            value={`${mostDeals.dealsWon} deals`}
+            sellerName={mostDeals.name}
+            tvMode={isTv}
+          />
+        )}
+        {mostTasks && (
+          <MetricCard
+            icon={<BarChart3 className="h-5 w-5 text-blue-500" />}
+            title="Mais Tarefas Concluídas"
+            value={`${mostTasks.tasksCompleted} tarefas`}
+            sellerName={mostTasks.name}
+            tvMode={isTv}
+          />
+        )}
+        {bestConversion && (
+          <MetricCard
+            icon={<TrendingUp className="h-5 w-5 text-purple-500" />}
+            title="Maior Taxa de Conversão"
+            value={`${bestConversion.conversionRate}%`}
+            sellerName={bestConversion.name}
+            tvMode={isTv}
+          />
+        )}
+      </motion.div>
+    );
+  };
 
   // ─── TV Mode Overlay ─────────────────────────────────────────
   if (tvMode) {
@@ -291,7 +503,7 @@ export default function RankingPage() {
                   {periods.map((p) => (
                     <button
                       key={p.value}
-                      onClick={() => setPeriod(p.value)}
+                      onClick={() => handlePeriodChange(p.value)}
                       className={cn(
                         "rounded-md px-4 py-2 text-sm font-medium transition-colors",
                         period === p.value
@@ -312,108 +524,17 @@ export default function RankingPage() {
               </div>
             </div>
 
-            {/* TV Podium */}
-            <motion.div
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-              className="mb-8 grid grid-cols-3 gap-6"
-            >
-              <PodiumCard seller={top3[1]} position={2} tvMode />
-              <PodiumCard seller={top3[0]} position={1} tvMode />
-              <PodiumCard seller={top3[2]} position={3} tvMode />
-            </motion.div>
-
-            {/* TV Table */}
-            <Card hoverable={false} className="mb-8">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="border-b border-[var(--border-default)]">
-                      <th className="pb-4 pr-4 text-sm font-medium text-[var(--text-secondary)]">#</th>
-                      <th className="pb-4 pr-4 text-sm font-medium text-[var(--text-secondary)]">Vendedor</th>
-                      <th className="pb-4 pr-4 text-right text-sm font-medium text-[var(--text-secondary)]">Deals</th>
-                      <th className="pb-4 pr-4 text-right text-sm font-medium text-[var(--text-secondary)]">Receita</th>
-                      <th className="pb-4 pr-4 text-right text-sm font-medium text-[var(--text-secondary)]">Conversão</th>
-                      <th className="pb-4 pr-4 text-right text-sm font-medium text-[var(--text-secondary)]">Tarefas</th>
-                      <th className="pb-4 text-right text-sm font-medium text-[var(--text-secondary)]">Tempo Resp.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sellers.map((seller, i) => (
-                      <tr
-                        key={seller.id}
-                        className={cn(
-                          "border-b border-[var(--border-default)] last:border-0",
-                          getRowBg(i),
-                        )}
-                      >
-                        <td className="py-4 pr-4">
-                          <div className="flex items-center gap-2">
-                            <PositionChangeIcon change={seller.positionChange} />
-                            <span className="text-base font-bold text-[var(--text-primary)]">{i + 1}</span>
-                          </div>
-                        </td>
-                        <td className="py-4 pr-4">
-                          <div className="flex items-center gap-3">
-                            <Avatar name={seller.name} size="md" />
-                            <span className="text-base font-medium text-[var(--text-primary)]">{seller.name}</span>
-                          </div>
-                        </td>
-                        <td className="py-4 pr-4 text-right text-base text-[var(--text-primary)]">{seller.dealsWon}</td>
-                        <td className="py-4 pr-4 text-right text-base font-medium text-[var(--text-primary)]">
-                          R$ {seller.revenue.toLocaleString("pt-BR")}
-                        </td>
-                        <td className="py-4 pr-4 text-right">
-                          <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-sm font-medium text-emerald-500">
-                            {seller.conversionRate}%
-                          </span>
-                        </td>
-                        <td className="py-4 pr-4 text-right text-base text-[var(--text-primary)]">{seller.tasksCompleted}</td>
-                        <td className="py-4 text-right text-base text-[var(--text-secondary)]">{seller.avgResponseTime}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-
-            {/* TV Metrics */}
-            <motion.div
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-              className="grid grid-cols-4 gap-6"
-            >
-              <MetricCard
-                icon={<Zap className="h-5 w-5 text-orange-500" />}
-                title="Maior Receita"
-                value={`R$ ${bestRevenue.revenue.toLocaleString("pt-BR")}`}
-                sellerName={bestRevenue.name}
-                tvMode
-              />
-              <MetricCard
-                icon={<Target className="h-5 w-5 text-emerald-500" />}
-                title="Mais Deals Fechados"
-                value={`${mostDeals.dealsWon} deals`}
-                sellerName={mostDeals.name}
-                tvMode
-              />
-              <MetricCard
-                icon={<Clock className="h-5 w-5 text-blue-500" />}
-                title="Menor Tempo de Resposta"
-                value={fastestResponse.avgResponseTime}
-                sellerName={fastestResponse.name}
-                tvMode
-              />
-              <MetricCard
-                icon={<TrendingUp className="h-5 w-5 text-purple-500" />}
-                title="Maior Taxa de Conversão"
-                value={`${bestConversion.conversionRate}%`}
-                sellerName={bestConversion.name}
-                tvMode
-              />
-            </motion.div>
+            {loading ? (
+              <LoadingState />
+            ) : sellers.length === 0 ? (
+              <EmptyState tvMode />
+            ) : (
+              <>
+                {renderPodium(true)}
+                {renderTable(true)}
+                {renderMetrics(true)}
+              </>
+            )}
           </div>
         </motion.div>
       </AnimatePresence>
@@ -432,7 +553,7 @@ export default function RankingPage() {
             {periods.map((p) => (
               <button
                 key={p.value}
-                onClick={() => setPeriod(p.value)}
+                onClick={() => handlePeriodChange(p.value)}
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                   period === p.value
@@ -485,141 +606,31 @@ export default function RankingPage() {
         </Button>
       </div>
 
-      {/* Podium Top 3 */}
-      <motion.div
-        variants={staggerContainer}
-        initial="hidden"
-        animate="visible"
-        className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3"
-      >
-        <PodiumCard seller={top3[1]} position={2} tvMode={false} />
-        <PodiumCard seller={top3[0]} position={1} tvMode={false} />
-        <PodiumCard seller={top3[2]} position={3} tvMode={false} />
-      </motion.div>
+      {loading ? (
+        <LoadingState />
+      ) : sellers.length === 0 ? (
+        <EmptyState tvMode={false} />
+      ) : (
+        <>
+          {/* Podium Top 3 */}
+          {renderPodium(false)}
 
-      {/* Full Ranking Table */}
-      <motion.div
-        variants={staggerContainer}
-        initial="hidden"
-        animate="visible"
-        className="mb-6"
-      >
-        <motion.div variants={staggerChild}>
-          <Card hoverable={false} className="flex flex-col gap-4">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-              Ranking Completo
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--border-default)]">
-                    <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">#</th>
-                    <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">Vendedor</th>
-                    <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Deals Ganhos</th>
-                    <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Receita</th>
-                    <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Conversão</th>
-                    <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Tarefas</th>
-                    <th className="pb-3 text-right text-xs font-medium text-[var(--text-secondary)]">Tempo Resp.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sellers.map((seller, i) => (
-                    <tr
-                      key={seller.id}
-                      className={cn(
-                        "border-b border-[var(--border-default)] last:border-0",
-                        getRowBg(i),
-                      )}
-                    >
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-2">
-                          <PositionChangeIcon change={seller.positionChange} />
-                          <span
-                            className={cn(
-                              "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
-                              i === 0
-                                ? "bg-orange-500/10 text-orange-500"
-                                : i === 1
-                                  ? "bg-neutral-400/10 text-neutral-400"
-                                  : i === 2
-                                    ? "bg-amber-600/10 text-amber-600"
-                                    : "bg-[var(--bg-elevated)] text-[var(--text-secondary)]",
-                            )}
-                          >
-                            {i + 1}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar name={seller.name} size="sm" />
-                          <span className="font-medium text-[var(--text-primary)]">
-                            {seller.name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4 text-right text-[var(--text-primary)]">
-                        {seller.dealsWon}
-                      </td>
-                      <td className="py-3 pr-4 text-right font-medium text-[var(--text-primary)]">
-                        R$ {seller.revenue.toLocaleString("pt-BR")}
-                      </td>
-                      <td className="py-3 pr-4 text-right">
-                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
-                          {seller.conversionRate}%
-                        </span>
-                      </td>
-                      <td className="py-3 pr-4 text-right text-[var(--text-primary)]">
-                        {seller.tasksCompleted}
-                      </td>
-                      <td className="py-3 text-right text-[var(--text-secondary)]">
-                        {seller.avgResponseTime}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </motion.div>
-      </motion.div>
+          {/* Full Ranking Table */}
+          <motion.div
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+            className="mb-6"
+          >
+            <motion.div variants={staggerChild}>
+              {renderTable(false)}
+            </motion.div>
+          </motion.div>
 
-      {/* Comparative Metrics */}
-      <motion.div
-        variants={staggerContainer}
-        initial="hidden"
-        animate="visible"
-        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
-      >
-        <MetricCard
-          icon={<Zap className="h-5 w-5 text-orange-500" />}
-          title="Maior Receita"
-          value={`R$ ${bestRevenue.revenue.toLocaleString("pt-BR")}`}
-          sellerName={bestRevenue.name}
-          tvMode={false}
-        />
-        <MetricCard
-          icon={<Target className="h-5 w-5 text-emerald-500" />}
-          title="Mais Deals Fechados"
-          value={`${mostDeals.dealsWon} deals`}
-          sellerName={mostDeals.name}
-          tvMode={false}
-        />
-        <MetricCard
-          icon={<Clock className="h-5 w-5 text-blue-500" />}
-          title="Menor Tempo de Resposta"
-          value={fastestResponse.avgResponseTime}
-          sellerName={fastestResponse.name}
-          tvMode={false}
-        />
-        <MetricCard
-          icon={<TrendingUp className="h-5 w-5 text-purple-500" />}
-          title="Maior Taxa de Conversão"
-          value={`${bestConversion.conversionRate}%`}
-          sellerName={bestConversion.name}
-          tvMode={false}
-        />
-      </motion.div>
+          {/* Comparative Metrics */}
+          {renderMetrics(false)}
+        </>
+      )}
     </PageContainer>
   );
 }

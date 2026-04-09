@@ -29,7 +29,8 @@
       "Bash(npm audit:*)",
       "Bash(ls -d \"C:/Users/Renan/axcend-crm/src/components/\"*)",
       "Bash(xargs wc:*)",
-      "Bash(gh:*)"
+      "Bash(gh:*)",
+      "Bash(find C:\\\\Users\\\\Renan\\\\axcend-crm\\\\src\\\\app\\\\api\\\\deals:*)"
     ]
   }
 }
