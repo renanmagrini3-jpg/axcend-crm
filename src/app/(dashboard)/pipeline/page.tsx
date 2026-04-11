@@ -223,6 +223,12 @@ export default function PipelinePage() {
     [],
   );
 
+  // --- Deal updated via detail panel (edit, move, etc.) ---
+
+  const handleDealUpdated = useCallback((updated: DealFromAPI) => {
+    setDeals((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+  }, []);
+
   // --- New Deal ---
 
   const handleCreateDeal = useCallback(async () => {
@@ -385,7 +391,10 @@ export default function PipelinePage() {
       <PipelineBoard
         stages={stages}
         initialDeals={dealsByStage}
+        contacts={contacts}
+        companies={companies}
         onMoveDeal={handleMoveDeal}
+        onDealUpdated={handleDealUpdated}
       />
 
       {/* New Deal Modal */}

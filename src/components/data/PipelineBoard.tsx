@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   DragDropContext,
   Droppable,
@@ -10,7 +10,7 @@ import {
 import { cn } from "@/lib/cn";
 import { Modal, Input } from "@/components/ui";
 import { DealCard, type DealCardData } from "./DealCard";
-import { DealDetailPanel } from "./DealDetailPanel";
+import { DealDetailPanel, type DealFromApi } from "./DealDetailPanel";
 
 export interface StageData {
   id: string;
@@ -18,11 +18,25 @@ export interface StageData {
   order: number;
 }
 
+interface ContactOption {
+  id: string;
+  name: string;
+  company_id?: string | null;
+}
+
+interface CompanyOption {
+  id: string;
+  name: string;
+}
+
 export interface PipelineBoardProps {
   stages: StageData[];
   initialDeals: Record<string, DealCardData[]>;
+  contacts?: ContactOption[];
+  companies?: CompanyOption[];
   onMoveDeal?: (dealId: string, stageId: string, lossReason?: string) => Promise<boolean>;
   onDealClick?: (deal: DealCardData) => void;
+  onDealUpdated?: (updated: DealFromApi) => void;
 }
 
 function formatCurrency(value: number): string {
@@ -32,15 +46,33 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function PipelineBoard({ stages, initialDeals, onMoveDeal, onDealClick }: PipelineBoardProps) {
+function PipelineBoard({
+  stages,
+  initialDeals,
+  contacts,
+  companies,
+  onMoveDeal,
+  onDealClick,
+  onDealUpdated,
+}: PipelineBoardProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showLeftFade, setShowLeftFade] = useState(false);
   const [showRightFade, setShowRightFade] = useState(true);
 
   const [dealsByStage, setDealsByStage] =
     useState<Record<string, DealCardData[]>>(initialDeals);
-  const [selectedDeal, setSelectedDeal] = useState<DealCardData | null>(null);
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [selectedStageName, setSelectedStageName] = useState<string>("");
+
+  // Derive selected deal from current dealsByStage so updates flow through
+  const selectedDeal = useMemo<DealCardData | null>(() => {
+    if (!selectedDealId) return null;
+    for (const list of Object.values(dealsByStage)) {
+      const found = list.find((d) => d.id === selectedDealId);
+      if (found) return found;
+    }
+    return null;
+  }, [dealsByStage, selectedDealId]);
 
   // Loss reason modal
   const [lossModalOpen, setLossModalOpen] = useState(false);
@@ -201,7 +233,7 @@ function PipelineBoard({ stages, initialDeals, onMoveDeal, onDealClick }: Pipeli
 
   const handleDealClick = useCallback(
     (deal: DealCardData, stageName: string) => {
-      setSelectedDeal(deal);
+      setSelectedDealId(deal.id);
       setSelectedStageName(stageName);
       onDealClick?.(deal);
     },
@@ -359,7 +391,12 @@ function PipelineBoard({ stages, initialDeals, onMoveDeal, onDealClick }: Pipeli
       <DealDetailPanel
         deal={selectedDeal}
         stageName={selectedStageName}
-        onClose={() => setSelectedDeal(null)}
+        stages={stages}
+        contacts={contacts}
+        companies={companies}
+        onClose={() => setSelectedDealId(null)}
+        onMoveDeal={onMoveDeal}
+        onDealUpdated={onDealUpdated}
       />
     </>
   );

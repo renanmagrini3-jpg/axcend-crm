@@ -20,6 +20,9 @@ interface NewTaskModalProps {
   open: boolean;
   onClose: () => void;
   onCreated?: () => void;
+  presetDealId?: string;
+  presetContactId?: string;
+  lockDeal?: boolean;
 }
 
 // --- Options ---
@@ -59,12 +62,28 @@ const initialForm: NewTaskFormData = {
   notes: "",
 };
 
-function NewTaskModal({ open, onClose, onCreated }: NewTaskModalProps) {
+function NewTaskModal({
+  open,
+  onClose,
+  onCreated,
+  presetDealId,
+  presetContactId,
+  lockDeal,
+}: NewTaskModalProps) {
   const { toast } = useToast();
   const [form, setForm] = useState<NewTaskFormData>(initialForm);
   const [saving, setSaving] = useState(false);
   const [contacts, setContacts] = useState<{ id: string; name: string }[]>([]);
   const [deals, setDeals] = useState<{ id: string; title: string }[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    setForm((prev) => ({
+      ...prev,
+      dealId: presetDealId ?? prev.dealId,
+      contactId: presetContactId ?? prev.contactId,
+    }));
+  }, [open, presetDealId, presetContactId]);
 
   useEffect(() => {
     if (!open) return;
@@ -237,6 +256,7 @@ function NewTaskModal({ open, onClose, onCreated }: NewTaskModalProps) {
             value={form.dealId}
             onChange={(e) => update("dealId", e.target.value)}
             className={selectClass}
+            disabled={lockDeal}
           >
             <option value="">Nenhum</option>
             {deals.map((d) => (

@@ -17,6 +17,8 @@ export async function GET(req: NextRequest) {
   const priority = searchParams.get("priority") || "";
   const dateFrom = searchParams.get("dateFrom") || "";
   const dateTo = searchParams.get("dateTo") || "";
+  const dealId = searchParams.get("deal_id") || "";
+  const contactId = searchParams.get("contact_id") || "";
   const page = Math.max(1, Number(searchParams.get("page") || "1"));
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") || "50")));
   const sortBy = searchParams.get("sortBy") || "due_at";
@@ -35,6 +37,8 @@ export async function GET(req: NextRequest) {
   if (status) query = query.eq("status", status);
   if (type) query = query.eq("type", type);
   if (priority) query = query.eq("priority", priority);
+  if (dealId) query = query.eq("deal_id", dealId);
+  if (contactId) query = query.eq("contact_id", contactId);
   if (dateFrom) query = query.gte("due_at", dateFrom);
   if (dateTo) query = query.lte("due_at", dateTo);
 
