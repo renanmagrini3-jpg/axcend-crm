@@ -576,13 +576,13 @@ function DealDetailPanel({
                 </h3>
 
                 {/* Note composer */}
-                <div className="mb-3 flex flex-col gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3">
+                <div className="mb-3 flex flex-col gap-2">
                   <textarea
                     value={noteInput}
                     onChange={(e) => setNoteInput(e.target.value)}
                     placeholder="Adicionar uma nota sobre este deal..."
                     rows={3}
-                    className="w-full resize-none bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
+                    className="w-full resize-none rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors focus:border-[var(--border-focus)] focus:outline-none"
                   />
                   <div className="flex justify-end">
                     <Button
