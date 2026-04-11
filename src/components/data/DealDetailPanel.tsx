@@ -165,6 +165,9 @@ function DealDetailPanel({
   const [targetStageId, setTargetStageId] = useState("");
   const [lossReason, setLossReason] = useState("");
   const [moving, setMoving] = useState(false);
+  const [lossReasonOptions, setLossReasonOptions] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
 
   // Note composer state
   const [noteInput, setNoteInput] = useState("");
@@ -329,6 +332,17 @@ function DealDetailPanel({
     setTargetStageId(data.stage_id);
     setLossReason("");
     setMoveOpen(true);
+    try {
+      const res = await fetch("/api/loss-reasons?active=true");
+      if (res.ok) {
+        const json = await res.json();
+        setLossReasonOptions(
+          (json as Array<{ id: string; name: string }>) ?? [],
+        );
+      }
+    } catch {
+      /* ignore — fallback will still allow submitting via select empty */
+    }
   }, [fullDeal, deal, loadFullDeal]);
 
   const openNewTask = useCallback(async () => {
@@ -767,13 +781,23 @@ function DealDetailPanel({
               {requiresLossReason && (
                 <div>
                   <label className={labelClass}>Motivo da perda *</label>
-                  <textarea
+                  <select
                     value={lossReason}
                     onChange={(e) => setLossReason(e.target.value)}
-                    rows={3}
-                    placeholder="Por que este deal foi perdido?"
-                    className={`${inputClass} resize-none`}
-                  />
+                    className={inputClass}
+                  >
+                    <option value="">Selecione um motivo</option>
+                    {lossReasonOptions.map((r) => (
+                      <option key={r.id} value={r.name}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                  {lossReasonOptions.length === 0 && (
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
+                      Nenhum motivo cadastrado. Cadastre em Configurações → Motivos de Perda.
+                    </p>
+                  )}
                 </div>
               )}
 
