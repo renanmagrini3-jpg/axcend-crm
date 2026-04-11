@@ -11,6 +11,7 @@ const protectedPrefixes = [
   "/automations",
   "/ranking",
   "/settings",
+  "/onboarding",
 ];
 
 export async function updateSession(request: NextRequest) {
@@ -43,13 +44,33 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
+  const isOnboarding = pathname.startsWith("/onboarding");
 
   if (!user && isProtected) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (user && (pathname === "/login" || pathname === "/register")) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  if (user) {
+    const organizationId = user.user_metadata?.organization_id as
+      | string
+      | undefined;
+    const onboardingCompleted = user.user_metadata?.onboarding_completed === true;
+
+    // No org yet → force onboarding
+    if (!organizationId && isProtected && !isOnboarding) {
+      return NextResponse.redirect(new URL("/onboarding", request.url));
+    }
+
+    // Onboarding already completed → skip page
+    if (isOnboarding && onboardingCompleted) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+
+    // Authed user hitting login/register → route based on completion
+    if (pathname === "/login" || pathname === "/register") {
+      const target = onboardingCompleted ? "/dashboard" : "/onboarding";
+      return NextResponse.redirect(new URL(target, request.url));
+    }
   }
 
   return response;
