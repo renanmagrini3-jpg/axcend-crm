@@ -44,6 +44,52 @@ function getPeriodRange(period: Period): { start: string; end: string } {
   };
 }
 
+function getPreviousPeriodRange(period: Period): { start: string; end: string } {
+  const now = new Date();
+
+  switch (period) {
+    case "today": {
+      const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      return {
+        start: new Date(y.getFullYear(), y.getMonth(), y.getDate()).toISOString(),
+        end: new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999).toISOString(),
+      };
+    }
+    case "week": {
+      const day = now.getDay();
+      const diff = day === 0 ? 6 : day - 1;
+      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
+      const prevMonday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - 7);
+      const prevEnd = new Date(monday.getTime() - 1);
+      return { start: prevMonday.toISOString(), end: prevEnd.toISOString() };
+    }
+    case "month": {
+      const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const prevEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      return { start: prevStart.toISOString(), end: prevEnd.toISOString() };
+    }
+    case "quarter": {
+      const q = Math.floor(now.getMonth() / 3) * 3;
+      const prevStart = new Date(now.getFullYear(), q - 3, 1);
+      const prevEnd = new Date(now.getFullYear(), q, 0, 23, 59, 59, 999);
+      return { start: prevStart.toISOString(), end: prevEnd.toISOString() };
+    }
+    case "year": {
+      return {
+        start: new Date(now.getFullYear() - 1, 0, 1).toISOString(),
+        end: new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999).toISOString(),
+      };
+    }
+    default:
+      return getPreviousPeriodRange("month");
+  }
+}
+
+function calcChange(current: number, previous: number): number | null {
+  if (previous === 0) return current > 0 ? null : 0;
+  return Math.round(((current - previous) / previous) * 1000) / 10;
+}
+
 const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 export async function GET(req: NextRequest) {
@@ -53,6 +99,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const period = (searchParams.get("period") || "month") as Period;
   const { start, end } = getPeriodRange(period);
+  const { start: prevStart, end: prevEnd } = getPreviousPeriodRange(period);
   const orgId = auth.organizationId;
 
   // ── Fetch all pipeline stages to identify won/lost ──
@@ -76,55 +123,118 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ── 1. Stat Cards ──
-
-  // Revenue: SUM of won deals in period
-  const { data: wonDeals } = await auth.supabase
-    .from("deals")
-    .select("value, closed_at")
-    .eq("organization_id", orgId)
-    .in("stage_id", wonStageIds.length > 0 ? wonStageIds : ["__none__"])
-    .gte("closed_at", start)
-    .lte("closed_at", end);
-
-  const revenue = (wonDeals || []).reduce((sum, d) => sum + parseFloat(d.value || "0"), 0);
-
-  // Deals in pipeline: not won and not lost
   const closedIds = [...wonStageIds, ...lostStageIds];
+  const safeWonIds = wonStageIds.length > 0 ? wonStageIds : ["__none__"];
+  const safeLostIds = lostStageIds.length > 0 ? lostStageIds : ["__none__"];
+  const safeClosedIds = closedIds.length > 0 ? closedIds : ["__none__"];
+
+  // ══════════════════════════════════════════════════════
+  // ── 1. Stat Cards — current period + previous period ─
+  // ══════════════════════════════════════════════════════
+
+  // Parallel queries for current period
+  const [
+    { data: wonDeals },
+    { count: lostCount },
+    { count: totalDealsCount },
+    { count: completedTasksCount },
+  ] = await Promise.all([
+    auth.supabase
+      .from("deals")
+      .select("value, closed_at")
+      .eq("organization_id", orgId)
+      .in("stage_id", safeWonIds)
+      .gte("closed_at", start)
+      .lte("closed_at", end),
+    auth.supabase
+      .from("deals")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", orgId)
+      .in("stage_id", safeLostIds)
+      .gte("closed_at", start)
+      .lte("closed_at", end),
+    auth.supabase
+      .from("deals")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", orgId)
+      .gte("created_at", start)
+      .lte("created_at", end),
+    auth.supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", orgId)
+      .eq("status", "COMPLETED")
+      .gte("updated_at", start)
+      .lte("updated_at", end),
+  ]);
+
+  // Parallel queries for previous period
+  const [
+    { data: prevWonDeals },
+    { count: prevLostCount },
+    { count: prevTotalDealsCount },
+    { count: prevCompletedTasksCount },
+  ] = await Promise.all([
+    auth.supabase
+      .from("deals")
+      .select("value, closed_at")
+      .eq("organization_id", orgId)
+      .in("stage_id", safeWonIds)
+      .gte("closed_at", prevStart)
+      .lte("closed_at", prevEnd),
+    auth.supabase
+      .from("deals")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", orgId)
+      .in("stage_id", safeLostIds)
+      .gte("closed_at", prevStart)
+      .lte("closed_at", prevEnd),
+    auth.supabase
+      .from("deals")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", orgId)
+      .gte("created_at", prevStart)
+      .lte("created_at", prevEnd),
+    auth.supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", orgId)
+      .eq("status", "COMPLETED")
+      .gte("updated_at", prevStart)
+      .lte("updated_at", prevEnd),
+  ]);
+
+  // Current period metrics
+  const revenue = (wonDeals || []).reduce((sum, d) => sum + parseFloat(d.value || "0"), 0);
+  const wonCount = (wonDeals || []).length;
+  const totalClosed = wonCount + (lostCount || 0);
+  const conversionRate = totalClosed > 0 ? (wonCount / totalClosed) * 100 : 0;
+  const averageTicket = wonCount > 0 ? revenue / wonCount : 0;
+  const totalDeals = totalDealsCount ?? 0;
+  const completedTasks = completedTasksCount ?? 0;
+
+  // Previous period metrics
+  const prevRevenue = (prevWonDeals || []).reduce((sum, d) => sum + parseFloat(d.value || "0"), 0);
+  const prevWonCount = (prevWonDeals || []).length;
+  const prevTotalClosed = prevWonCount + (prevLostCount || 0);
+  const prevConversionRate = prevTotalClosed > 0 ? (prevWonCount / prevTotalClosed) * 100 : 0;
+  const prevAverageTicket = prevWonCount > 0 ? prevRevenue / prevWonCount : 0;
+  const prevTotalDeals = prevTotalDealsCount ?? 0;
+  const prevCompletedTasks = prevCompletedTasksCount ?? 0;
+
+  // Deals in pipeline (snapshot — no period comparison)
   let pipelineQuery = auth.supabase
     .from("deals")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", orgId);
 
   if (closedIds.length > 0) {
-    // exclude closed stages
     for (const id of closedIds) {
       pipelineQuery = pipelineQuery.neq("stage_id", id);
     }
   }
 
   const { count: dealsInPipeline } = await pipelineQuery;
-
-  // Conversion rate: won / (won + lost) in period
-  const wonCount = (wonDeals || []).length;
-
-  const { count: lostCount } = await auth.supabase
-    .from("deals")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", orgId)
-    .in("stage_id", lostStageIds.length > 0 ? lostStageIds : ["__none__"])
-    .gte("closed_at", start)
-    .lte("closed_at", end);
-
-  const totalClosed = wonCount + (lostCount || 0);
-  const conversionRate = totalClosed > 0 ? (wonCount / totalClosed) * 100 : 0;
-
-  // Pending tasks
-  const { count: pendingTasks } = await auth.supabase
-    .from("tasks")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", orgId)
-    .eq("status", "PENDING");
 
   // ── 2. Revenue chart (last 6 months) ──
   const now = new Date();
@@ -134,7 +244,7 @@ export async function GET(req: NextRequest) {
     .from("deals")
     .select("value, closed_at")
     .eq("organization_id", orgId)
-    .in("stage_id", wonStageIds.length > 0 ? wonStageIds : ["__none__"])
+    .in("stage_id", safeWonIds)
     .gte("closed_at", sixMonthsAgo.toISOString());
 
   const revenueByMonth: Record<string, number> = {};
@@ -164,7 +274,6 @@ export async function GET(req: NextRequest) {
     .select("stage_id, pipeline_stages(id, name, \"order\")")
     .eq("organization_id", orgId);
 
-  // Get active pipeline stages (exclude closed)
   const stageCounts: Record<string, { name: string; order: number; count: number }> = {};
   for (const s of allStages) {
     if (s.name !== "Fechado Ganho" && s.name !== "Fechado Perdido") {
@@ -192,7 +301,7 @@ export async function GET(req: NextRequest) {
     .from("deals")
     .select("stage_id, closed_at")
     .eq("organization_id", orgId)
-    .in("stage_id", closedIds.length > 0 ? closedIds : ["__none__"])
+    .in("stage_id", safeClosedIds)
     .gte("closed_at", sixMonthsAgo.toISOString());
 
   const wonLostByMonth: Record<string, { ganhos: number; perdidos: number }> = {};
@@ -225,7 +334,7 @@ export async function GET(req: NextRequest) {
     .from("deals")
     .select("loss_reason")
     .eq("organization_id", orgId)
-    .in("stage_id", lostStageIds.length > 0 ? lostStageIds : ["__none__"])
+    .in("stage_id", safeLostIds)
     .not("loss_reason", "is", null);
 
   const reasonCounts: Record<string, number> = {};
@@ -267,10 +376,17 @@ export async function GET(req: NextRequest) {
 
   return jsonSuccess({
     stats: {
+      totalDeals,
+      totalDealsChange: calcChange(totalDeals, prevTotalDeals),
       revenue,
-      dealsInPipeline: dealsInPipeline ?? 0,
+      revenueChange: calcChange(revenue, prevRevenue),
       conversionRate: Math.round(conversionRate * 10) / 10,
-      pendingTasks: pendingTasks ?? 0,
+      conversionRateChange: calcChange(conversionRate, prevConversionRate),
+      averageTicket: Math.round(averageTicket * 100) / 100,
+      averageTicketChange: calcChange(averageTicket, prevAverageTicket),
+      dealsInPipeline: dealsInPipeline ?? 0,
+      completedTasks,
+      completedTasksChange: calcChange(completedTasks, prevCompletedTasks),
     },
     charts: {
       revenue: revenueChart,

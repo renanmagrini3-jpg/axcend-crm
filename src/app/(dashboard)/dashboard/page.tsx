@@ -16,6 +16,8 @@ import {
   MessageSquare,
   FileText,
   Loader2,
+  BarChart3,
+  Receipt,
 } from "lucide-react";
 import {
   BarChart,
@@ -67,10 +69,17 @@ const taskIconMap: Record<string, typeof Phone> = {
 
 interface DashboardData {
   stats: {
+    totalDeals: number;
+    totalDealsChange: number | null;
     revenue: number;
-    dealsInPipeline: number;
+    revenueChange: number | null;
     conversionRate: number;
-    pendingTasks: number;
+    conversionRateChange: number | null;
+    averageTicket: number;
+    averageTicketChange: number | null;
+    dealsInPipeline: number;
+    completedTasks: number;
+    completedTasksChange: number | null;
   };
   charts: {
     revenue: { month: string; receita: number }[];
@@ -166,11 +175,13 @@ function exportDashboardCSV(data: DashboardData) {
 
   // Stats
   lines.push("=== Indicadores ===");
-  lines.push("Métrica,Valor");
-  lines.push(`Receita do Período,${data.stats.revenue.toFixed(2)}`);
-  lines.push(`Deals no Pipeline,${data.stats.dealsInPipeline}`);
-  lines.push(`Taxa de Conversão,${data.stats.conversionRate}%`);
-  lines.push(`Tarefas Pendentes,${data.stats.pendingTasks}`);
+  lines.push("Métrica,Valor,Variação (%)");
+  lines.push(`Receita do Período,${data.stats.revenue.toFixed(2)},${data.stats.revenueChange ?? "—"}`);
+  lines.push(`Total de Deals,${data.stats.totalDeals},${data.stats.totalDealsChange ?? "—"}`);
+  lines.push(`Taxa de Conversão,${data.stats.conversionRate}%,${data.stats.conversionRateChange ?? "—"}`);
+  lines.push(`Ticket Médio,${data.stats.averageTicket.toFixed(2)},${data.stats.averageTicketChange ?? "—"}`);
+  lines.push(`Deals em Andamento,${data.stats.dealsInPipeline},—`);
+  lines.push(`Tarefas Concluídas,${data.stats.completedTasks},${data.stats.completedTasksChange ?? "—"}`);
   lines.push("");
 
   // Revenue chart
@@ -273,7 +284,14 @@ export default function DashboardPage() {
   }
 
   // Fallback empty data
-  const stats = data?.stats ?? { revenue: 0, dealsInPipeline: 0, conversionRate: 0, pendingTasks: 0 };
+  const stats = data?.stats ?? {
+    totalDeals: 0, totalDealsChange: null,
+    revenue: 0, revenueChange: null,
+    conversionRate: 0, conversionRateChange: null,
+    averageTicket: 0, averageTicketChange: null,
+    dealsInPipeline: 0,
+    completedTasks: 0, completedTasksChange: null,
+  };
   const charts = data?.charts ?? {
     revenue: [],
     funnel: [],
@@ -333,7 +351,7 @@ export default function DashboardPage() {
         variants={staggerContainer}
         initial="hidden"
         animate="visible"
-        className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+        className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
       >
         <StatCard
           icon={<DollarSign size={22} />}
@@ -341,12 +359,14 @@ export default function DashboardPage() {
           value={stats.revenue}
           prefix="R$ "
           decimals={2}
+          change={stats.revenueChange}
           color="green"
         />
         <StatCard
-          icon={<Target size={22} />}
-          label="Deals no Pipeline"
-          value={stats.dealsInPipeline}
+          icon={<BarChart3 size={22} />}
+          label="Total de Deals"
+          value={stats.totalDeals}
+          change={stats.totalDealsChange}
           color="orange"
         />
         <StatCard
@@ -355,13 +375,30 @@ export default function DashboardPage() {
           value={stats.conversionRate}
           suffix="%"
           decimals={1}
+          change={stats.conversionRateChange}
           color="blue"
         />
         <StatCard
-          icon={<CheckCircle size={22} />}
-          label="Tarefas Pendentes"
-          value={stats.pendingTasks}
+          icon={<Receipt size={22} />}
+          label="Ticket Médio"
+          value={stats.averageTicket}
+          prefix="R$ "
+          decimals={2}
+          change={stats.averageTicketChange}
+          color="purple"
+        />
+        <StatCard
+          icon={<Target size={22} />}
+          label="Deals em Andamento"
+          value={stats.dealsInPipeline}
           color="yellow"
+        />
+        <StatCard
+          icon={<CheckCircle size={22} />}
+          label="Tarefas Concluídas"
+          value={stats.completedTasks}
+          change={stats.completedTasksChange}
+          color="green"
         />
       </motion.div>
 

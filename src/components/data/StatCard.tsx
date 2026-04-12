@@ -14,8 +14,8 @@ interface StatCardProps {
   prefix?: string;
   suffix?: string;
   decimals?: number;
-  change?: number;
-  color: "green" | "orange" | "blue" | "yellow";
+  change?: number | null;
+  color: "green" | "orange" | "blue" | "yellow" | "purple";
 }
 
 const colorMap: Record<StatCardProps["color"], { bg: string; text: string }> = {
@@ -23,6 +23,7 @@ const colorMap: Record<StatCardProps["color"], { bg: string; text: string }> = {
   orange: { bg: "bg-orange-500/10", text: "text-orange-500" },
   blue: { bg: "bg-blue-500/10", text: "text-blue-500" },
   yellow: { bg: "bg-amber-500/10", text: "text-amber-500" },
+  purple: { bg: "bg-purple-500/10", text: "text-purple-500" },
 };
 
 function useCountUp(target: number, decimals: number, duration = 1200) {
@@ -77,7 +78,7 @@ function StatCard({
 }: StatCardProps) {
   const counted = useCountUp(value, decimals);
   const colors = colorMap[color];
-  const isPositive = change !== undefined && change >= 0;
+  const isPositive = change != null && change >= 0;
 
   return (
     <Card>
@@ -92,19 +93,22 @@ function StatCard({
           >
             {icon}
           </div>
-          {change !== undefined && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-                isPositive
-                  ? "bg-emerald-500/10 text-emerald-500"
-                  : "bg-red-500/10 text-red-500",
-              )}
-            >
-              {isPositive ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-              {isPositive ? "+" : ""}
-              {change}%
-            </span>
+          {change !== undefined && change !== null && (
+            <div className="flex items-center gap-1.5">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+                  isPositive
+                    ? "bg-emerald-500/10 text-emerald-500"
+                    : "bg-red-500/10 text-red-500",
+                )}
+              >
+                {isPositive ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                {isPositive ? "+" : ""}
+                {change.toFixed(1)}%
+              </span>
+              <span className="text-[10px] text-[var(--text-muted)]">vs anterior</span>
+            </div>
           )}
         </div>
         <p className="text-3xl font-bold text-[var(--text-primary)]">
