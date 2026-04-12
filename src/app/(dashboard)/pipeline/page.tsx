@@ -15,34 +15,18 @@ import {
 import { PageContainer } from "@/components/layout";
 import { Button, Modal, Input } from "@/components/ui";
 import { PipelineBoard, type StageData, type DealCardData } from "@/components/data";
+import type { DealFromApi } from "@/components/data/DealDetailPanel";
 import { cn } from "@/lib/cn";
 import type { Priority } from "@/types";
 
 // --- Types ---
 
+type DealFromAPI = DealFromApi;
+
 interface PipelineData {
   id: string;
   name: string;
   pipeline_stages: StageData[];
-}
-
-interface DealFromAPI {
-  id: string;
-  title: string;
-  value: number;
-  priority: Priority;
-  contact_id: string;
-  company_id: string | null;
-  pipeline_id: string;
-  stage_id: string;
-  assigned_to_id: string | null;
-  loss_reason: string | null;
-  closed_at: string | null;
-  created_at: string;
-  contacts: { id: string; name: string; email: string | null; phone: string | null } | null;
-  companies: { id: string; name: string } | null;
-  pipeline_stages: { id: string; name: string; order: number } | null;
-  organization_members: { id: string; name: string } | null;
 }
 
 interface MemberOption {
