@@ -44,59 +44,32 @@ export async function POST(req: NextRequest) {
     .replace(/^-|-$/g, "")
     + "-" + Date.now().toString(36);
 
-  // Create organization using service role to bypass RLS for initial insert
-  const { data: org, error: orgError } = await supabase
-    .from("organizations")
-    .insert({
-      name: name.toString().trim(),
-      slug,
-      mode: mode === "B2C" ? "B2C" : "B2B",
-    })
-    .select()
-    .single();
+  // Use SECURITY DEFINER RPC to bypass RLS during onboarding.
+  // New users have no organization_id in their JWT yet, so normal
+  // INSERT/SELECT policies on organizations, pipelines, etc. all fail.
+  const { data: result, error: rpcError } = await supabase.rpc(
+    "onboard_create_organization",
+    {
+      p_name: name.toString().trim(),
+      p_slug: slug,
+      p_mode: mode === "B2C" ? "B2C" : "B2B",
+    },
+  );
 
-  if (orgError) {
-    return NextResponse.json({ error: orgError.message }, { status: 500 });
+  if (rpcError) {
+    return NextResponse.json({ error: rpcError.message }, { status: 500 });
   }
 
-  // Update user metadata with organization_id
+  const orgId = result.organization_id;
+
+  // Update user metadata with organization_id so future JWTs include it
   const { error: updateError } = await supabase.auth.updateUser({
-    data: { organization_id: org.id },
+    data: { organization_id: orgId },
   });
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
-  // Create default pipeline with 7 stages
-  const { data: pipeline } = await supabase
-    .from("pipelines")
-    .insert({
-      name: "Pipeline Comercial",
-      organization_id: org.id,
-    })
-    .select()
-    .single();
-
-  if (pipeline) {
-    const defaultStages = [
-      { name: "Prospecção", order: 1 },
-      { name: "Agendamento", order: 2 },
-      { name: "Reunião", order: 3 },
-      { name: "Proposta", order: 4 },
-      { name: "Negociação", order: 5 },
-      { name: "Fechado Ganho", order: 6 },
-      { name: "Fechado Perdido", order: 7 },
-    ];
-
-    await supabase.from("pipeline_stages").insert(
-      defaultStages.map((s) => ({
-        name: s.name,
-        order: s.order,
-        pipeline_id: pipeline.id,
-      })),
-    );
-  }
-
-  return NextResponse.json({ organization_id: org.id }, { status: 201 });
+  return NextResponse.json({ organization_id: orgId }, { status: 201 });
 }
