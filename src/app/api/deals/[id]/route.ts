@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { data, error } = await auth.supabase
     .from("deals")
     .select(
-      "*, contacts(id, name, email, phone), companies(id, name), pipeline_stages(id, name, \"order\")",
+      "*, contacts(id, name, email, phone), companies(id, name), pipeline_stages(id, name, \"order\"), organization_members!deals_assigned_to_id_fkey(id, name)",
     )
     .eq("id", id)
     .eq("organization_id", auth.organizationId)
@@ -73,7 +73,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     .eq("id", id)
     .eq("organization_id", auth.organizationId)
     .select(
-      "*, contacts(id, name, email, phone), companies(id, name), pipeline_stages(id, name, \"order\")",
+      "*, contacts(id, name, email, phone), companies(id, name), pipeline_stages(id, name, \"order\"), organization_members!deals_assigned_to_id_fkey(id, name)",
     )
     .single();
 

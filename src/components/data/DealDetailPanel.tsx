@@ -48,6 +48,7 @@ export interface DealFromApi {
   contacts: { id: string; name: string; email: string | null; phone: string | null } | null;
   companies: { id: string; name: string } | null;
   pipeline_stages: { id: string; name: string; order: number } | null;
+  organization_members: { id: string; name: string } | null;
 }
 
 interface DealNote {
@@ -158,8 +159,10 @@ function DealDetailPanel({
     priority: "MEDIUM" as Priority,
     contact_id: "",
     company_id: "",
+    assigned_to_id: "",
   });
   const [editSaving, setEditSaving] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; name: string }>>([]);
 
   // Move form state
   const [targetStageId, setTargetStageId] = useState("");
@@ -266,6 +269,7 @@ function DealDetailPanel({
       priority: d.priority,
       contact_id: d.contact_id,
       company_id: d.company_id ?? "",
+      assigned_to_id: d.assigned_to_id ?? "",
     });
   }, []);
 
@@ -277,6 +281,13 @@ function DealDetailPanel({
     if (!data) return;
     hydrateEditForm(data);
     setEditOpen(true);
+    try {
+      const res = await fetch("/api/team");
+      if (res.ok) {
+        const json = await res.json();
+        setTeamMembers((json as Array<{ id: string; name: string }>) ?? []);
+      }
+    } catch { /* ignore */ }
   }, [fullDeal, deal, loadFullDeal, hydrateEditForm]);
 
   const handleEditSave = useCallback(async () => {
@@ -301,6 +312,7 @@ function DealDetailPanel({
           priority: editForm.priority,
           contact_id: editForm.contact_id,
           company_id: editForm.company_id || null,
+          assigned_to_id: editForm.assigned_to_id || null,
         }),
       });
       const json = await res.json();
@@ -461,6 +473,7 @@ function DealDetailPanel({
   const displayContactName = fullDeal?.contacts?.name ?? deal?.contactName ?? "—";
   const displayCompanyName = fullDeal?.companies?.name ?? deal?.companyName ?? "—";
   const displayStageName = fullDeal?.pipeline_stages?.name ?? stageName ?? "—";
+  const displayAssigneeName = fullDeal?.organization_members?.name ?? deal?.assigneeName ?? "—";
 
   return (
     <AnimatePresence>
@@ -520,9 +533,9 @@ function DealDetailPanel({
                     Responsável
                   </p>
                   <div className="flex items-center gap-2">
-                    <Avatar name={deal.assigneeName} size="sm" />
+                    <Avatar name={displayAssigneeName} size="sm" />
                     <span className="text-sm text-[var(--text-primary)]">
-                      {deal.assigneeName}
+                      {displayAssigneeName}
                     </span>
                   </div>
                 </div>
@@ -725,6 +738,24 @@ function DealDetailPanel({
                   {companies.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClass}>Responsável</label>
+                <select
+                  value={editForm.assigned_to_id}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, assigned_to_id: e.target.value }))
+                  }
+                  className={inputClass}
+                >
+                  <option value="">Nenhum</option>
+                  {teamMembers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
                     </option>
                   ))}
                 </select>

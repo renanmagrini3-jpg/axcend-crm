@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   let query = auth.supabase
     .from("deals")
     .select(
-      "*, contacts(id, name, email, phone), companies(id, name), pipeline_stages(id, name, \"order\")",
+      "*, contacts(id, name, email, phone), companies(id, name), pipeline_stages(id, name, \"order\"), organization_members!deals_assigned_to_id_fkey(id, name)",
       { count: "exact" },
     )
     .eq("organization_id", auth.organizationId)
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       organization_id: auth.organizationId,
     })
     .select(
-      "*, contacts(id, name, email, phone), companies(id, name), pipeline_stages(id, name, \"order\")",
+      "*, contacts(id, name, email, phone), companies(id, name), pipeline_stages(id, name, \"order\"), organization_members!deals_assigned_to_id_fkey(id, name)",
     )
     .single();
 

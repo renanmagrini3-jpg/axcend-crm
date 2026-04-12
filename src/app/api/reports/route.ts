@@ -13,7 +13,10 @@ type ReportType =
   | "loss-reasons"
   | "stage-conversion"
   | "revenue-period"
-  | "response-time";
+  | "response-time"
+  | "team-performance"
+  | "activities"
+  | "revenue-forecast";
 
 const MONTH_LABELS = [
   "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
@@ -85,6 +88,12 @@ export async function GET(req: NextRequest) {
       return await revenuePeriod(auth, orgId, wonStageIds);
     case "response-time":
       return responseTime();
+    case "team-performance":
+      return await teamPerformance(auth, orgId, periodStart, wonStageIds, lostStageIds);
+    case "activities":
+      return await activitiesReport(auth, orgId, periodStart);
+    case "revenue-forecast":
+      return await revenueForecast(auth, orgId, wonStageIds, allStages, lostStageIds);
     default:
       return jsonError("Tipo de relatório inválido", 400);
   }
@@ -342,5 +351,184 @@ function responseTime() {
     type: "response-time",
     data: [],
     message: "Relatório de tempo de resposta requer rastreamento de atividades. Dados insuficientes.",
+  });
+}
+
+// ─── Team Performance ────────────────────────────────────────
+
+async function teamPerformance(
+  auth: { supabase: Awaited<ReturnType<typeof import("@/lib/supabase/server").createServerClient>> },
+  orgId: string,
+  periodStart: string,
+  wonStageIds: string[],
+  lostStageIds: string[],
+) {
+  const closedIds = [...wonStageIds, ...lostStageIds];
+
+  const [{ data: deals }, { data: members }] = await Promise.all([
+    auth.supabase
+      .from("deals")
+      .select("id, value, stage_id, assigned_to_id, closed_at")
+      .eq("organization_id", orgId)
+      .in("stage_id", closedIds.length > 0 ? closedIds : ["__none__"])
+      .gte("closed_at", periodStart),
+    auth.supabase
+      .from("organization_members")
+      .select("id, name, role")
+      .eq("organization_id", orgId),
+  ]);
+
+  const memberMap = new Map((members || []).map((m) => [m.id, m.name]));
+
+  const teamStats: Record<string, { name: string; won: number; lost: number; revenue: number }> = {};
+
+  for (const deal of deals || []) {
+    const memberId = deal.assigned_to_id;
+    if (!memberId) continue;
+    const name = memberMap.get(memberId) || "Sem responsável";
+
+    if (!teamStats[memberId]) {
+      teamStats[memberId] = { name, won: 0, lost: 0, revenue: 0 };
+    }
+
+    if (wonStageIds.includes(deal.stage_id)) {
+      teamStats[memberId].won++;
+      teamStats[memberId].revenue += parseFloat(deal.value || "0");
+    } else if (lostStageIds.includes(deal.stage_id)) {
+      teamStats[memberId].lost++;
+    }
+  }
+
+  const rows = Object.values(teamStats)
+    .map((v) => ({
+      ...v,
+      total: v.won + v.lost,
+      conversao: v.won + v.lost > 0 ? Math.round((v.won / (v.won + v.lost)) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
+
+  return jsonSuccess({ type: "team-performance", data: rows });
+}
+
+// ─── Activities Report ───────────────────────────────────────
+
+async function activitiesReport(
+  auth: { supabase: Awaited<ReturnType<typeof import("@/lib/supabase/server").createServerClient>> },
+  orgId: string,
+  periodStart: string,
+) {
+  const [{ data: tasks }, { data: members }] = await Promise.all([
+    auth.supabase
+      .from("tasks")
+      .select("id, type, status, assigned_to_id")
+      .eq("organization_id", orgId)
+      .gte("created_at", periodStart),
+    auth.supabase
+      .from("organization_members")
+      .select("id, name")
+      .eq("organization_id", orgId),
+  ]);
+
+  const memberMap = new Map((members || []).map((m) => [m.id, m.name]));
+
+  const actStats: Record<string, { name: string; total: number; completed: number; pending: number; byType: Record<string, number> }> = {};
+
+  for (const task of tasks || []) {
+    const memberId = task.assigned_to_id;
+    if (!memberId) continue;
+    const name = memberMap.get(memberId) || "Sem responsável";
+
+    if (!actStats[memberId]) {
+      actStats[memberId] = { name, total: 0, completed: 0, pending: 0, byType: {} };
+    }
+
+    actStats[memberId].total++;
+    if (task.status === "COMPLETED") {
+      actStats[memberId].completed++;
+    } else {
+      actStats[memberId].pending++;
+    }
+    actStats[memberId].byType[task.type] = (actStats[memberId].byType[task.type] || 0) + 1;
+  }
+
+  const rows = Object.values(actStats)
+    .map((v) => ({
+      name: v.name,
+      total: v.total,
+      completed: v.completed,
+      pending: v.pending,
+      calls: v.byType["CALL"] || 0,
+      emails: v.byType["EMAIL"] || 0,
+      meetings: v.byType["MEETING"] || 0,
+      followups: v.byType["FOLLOW_UP"] || 0,
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  return jsonSuccess({ type: "activities", data: rows });
+}
+
+// ─── Revenue Forecast ────────────────────────────────────────
+
+async function revenueForecast(
+  auth: { supabase: Awaited<ReturnType<typeof import("@/lib/supabase/server").createServerClient>> },
+  orgId: string,
+  wonStageIds: string[],
+  allStages: { id: string; name: string; order: number }[],
+  lostStageIds: string[],
+) {
+  const now = new Date();
+  const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+  const closedIds = [...wonStageIds, ...lostStageIds];
+
+  // Historical revenue for average
+  const { data: recentWon } = await auth.supabase
+    .from("deals")
+    .select("value, closed_at")
+    .eq("organization_id", orgId)
+    .in("stage_id", wonStageIds.length > 0 ? wonStageIds : ["__none__"])
+    .gte("closed_at", threeMonthsAgo.toISOString());
+
+  const totalRecentRevenue = (recentWon || []).reduce((s, d) => s + parseFloat(d.value || "0"), 0);
+  const avgMonthlyRevenue = totalRecentRevenue / 3;
+
+  // Active pipeline deals with stage-based probability
+  const activeStages = allStages
+    .filter((s) => !closedIds.includes(s.id))
+    .sort((a, b) => a.order - b.order);
+
+  const totalActiveStages = activeStages.length;
+  const stageProbability = new Map(
+    activeStages.map((s, i) => [s.id, totalActiveStages > 0 ? ((i + 1) / totalActiveStages) * 100 : 50]),
+  );
+
+  const { data: pipelineDeals } = await auth.supabase
+    .from("deals")
+    .select("id, title, value, stage_id")
+    .eq("organization_id", orgId)
+    .not("stage_id", "in", `(${closedIds.length > 0 ? closedIds.join(",") : "__none__"})`);
+
+  const rows = (pipelineDeals || []).map((deal) => {
+    const prob = stageProbability.get(deal.stage_id) ?? 50;
+    const val = parseFloat(deal.value || "0");
+    return {
+      name: deal.title,
+      value: val,
+      probability: Math.round(prob),
+      weighted: Math.round(val * (prob / 100) * 100) / 100,
+      stage: allStages.find((s) => s.id === deal.stage_id)?.name ?? "—",
+    };
+  }).sort((a, b) => b.weighted - a.weighted);
+
+  const totalWeighted = rows.reduce((s, r) => s + r.weighted, 0);
+
+  return jsonSuccess({
+    type: "revenue-forecast",
+    data: rows,
+    summary: {
+      avgMonthlyRevenue: Math.round(avgMonthlyRevenue * 100) / 100,
+      totalPipelineValue: rows.reduce((s, r) => s + r.value, 0),
+      totalWeightedForecast: Math.round(totalWeighted * 100) / 100,
+      dealsCount: rows.length,
+    },
   });
 }

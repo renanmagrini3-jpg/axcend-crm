@@ -95,7 +95,26 @@ interface RevenueRow {
   receita: number;
 }
 
-type ReportData = VendorRow[] | OriginRow[] | LossRow[] | StageRow[] | RevenueRow[];
+interface ActivityRow {
+  name: string;
+  total: number;
+  completed: number;
+  pending: number;
+  calls: number;
+  emails: number;
+  meetings: number;
+  followups: number;
+}
+
+interface ForecastRow {
+  name: string;
+  value: number;
+  probability: number;
+  weighted: number;
+  stage: string;
+}
+
+type ReportData = VendorRow[] | OriginRow[] | LossRow[] | StageRow[] | RevenueRow[] | ActivityRow[] | ForecastRow[];
 
 interface ReportState {
   loading: boolean;
@@ -544,14 +563,167 @@ function StageConversionReport({ data }: { data: StageRow[] }) {
   );
 }
 
+function TeamPerformanceReport({ data }: { data: VendorRow[] }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="h-[300px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+            <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} />
+            <YAxis tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v: string) => <span style={{ color: "var(--text-secondary)" }}>{v}</span>} />
+            <Bar dataKey="won" name="Ganhos" fill="#10B981" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="lost" name="Perdidos" fill="#EF4444" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border-default)]">
+              <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">Membro</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Ganhos</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Perdidos</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Receita</th>
+              <th className="pb-3 text-right text-xs font-medium text-[var(--text-secondary)]">Conversão</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row) => (
+              <tr key={row.name} className="border-b border-[var(--border-default)] last:border-0">
+                <td className="py-3 pr-4 font-medium text-[var(--text-primary)]">{row.name}</td>
+                <td className="py-3 pr-4 text-right text-emerald-500">{row.won}</td>
+                <td className="py-3 pr-4 text-right text-red-500">{row.lost}</td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">
+                  R$ {row.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </td>
+                <td className="py-3 text-right">
+                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">{row.conversao}%</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ActivitiesReport({ data }: { data: ActivityRow[] }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="h-[300px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+            <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} />
+            <YAxis tick={{ fill: "var(--text-secondary)", fontSize: 12 }} />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v: string) => <span style={{ color: "var(--text-secondary)" }}>{v}</span>} />
+            <Bar dataKey="completed" name="Concluídas" fill="#10B981" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="pending" name="Pendentes" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border-default)]">
+              <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">Vendedor</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Total</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Concluídas</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Ligações</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">E-mails</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Reuniões</th>
+              <th className="pb-3 text-right text-xs font-medium text-[var(--text-secondary)]">Follow-ups</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row) => (
+              <tr key={row.name} className="border-b border-[var(--border-default)] last:border-0">
+                <td className="py-3 pr-4 font-medium text-[var(--text-primary)]">{row.name}</td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">{row.total}</td>
+                <td className="py-3 pr-4 text-right text-emerald-500">{row.completed}</td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">{row.calls}</td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">{row.emails}</td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">{row.meetings}</td>
+                <td className="py-3 text-right text-[var(--text-primary)]">{row.followups}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function RevenueForecastReport({ data }: { data: ForecastRow[] }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="h-[300px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data.slice(0, 15)} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
+            <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
+            <YAxis tick={{ fill: "var(--text-secondary)", fontSize: 12 }} tickFormatter={(v: number) => `R$ ${(v / 1000).toFixed(0)}k`} />
+            <Tooltip content={<CustomTooltip currency />} />
+            <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v: string) => <span style={{ color: "var(--text-secondary)" }}>{v}</span>} />
+            <Bar dataKey="value" name="Valor Total" fill="#A3A3A3" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="weighted" name="Valor Ponderado" fill="#F97316" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border-default)]">
+              <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">Deal</th>
+              <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">Etapa</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Valor</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Probabilidade</th>
+              <th className="pb-3 text-right text-xs font-medium text-[var(--text-secondary)]">Forecast</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row) => (
+              <tr key={row.name} className="border-b border-[var(--border-default)] last:border-0">
+                <td className="py-3 pr-4 font-medium text-[var(--text-primary)]">{row.name}</td>
+                <td className="py-3 pr-4 text-[var(--text-secondary)]">{row.stage}</td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">
+                  R$ {row.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </td>
+                <td className="py-3 pr-4 text-right">
+                  <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-500">{row.probability}%</span>
+                </td>
+                <td className="py-3 text-right font-medium text-orange-500">
+                  R$ {row.weighted.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Smart Query Engine ───────────────────────────────────────
 
 interface DashboardData {
   stats: {
+    totalDeals: number;
+    totalDealsChange: number | null;
     revenue: number;
-    dealsInPipeline: number;
+    revenueChange: number | null;
     conversionRate: number;
-    pendingTasks: number;
+    conversionRateChange: number | null;
+    averageTicket: number;
+    averageTicketChange: number | null;
+    dealsInPipeline: number;
+    completedTasks: number;
+    completedTasksChange: number | null;
   };
   charts: {
     revenue: { month: string; receita: number }[];
@@ -564,13 +736,27 @@ interface DashboardData {
 
 function processSmartQuery(question: string, data: DashboardData): string {
   const q = question.toLowerCase();
+  const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
 
   if (q.includes("receita") || q.includes("faturamento") || q.includes("revenue")) {
     const total = data.stats.revenue;
     const months = data.charts.revenue;
-    const best = months.reduce((a, b) => (b.receita > a.receita ? b : a), months[0]);
-    return `Sua receita no período atual é de R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}. ` +
-      (best ? `O melhor mês foi ${best.month} com R$ ${best.receita.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.` : "");
+    const best = months.length > 0
+      ? months.reduce((a, b) => (b.receita > a.receita ? b : a), months[0])
+      : null;
+    let msg = `Sua receita no período atual é de R$ ${fmt(total)}.`;
+    if (data.stats.revenueChange !== null) {
+      msg += ` Variação de ${data.stats.revenueChange > 0 ? "+" : ""}${data.stats.revenueChange}% vs período anterior.`;
+    }
+    if (best) msg += ` Melhor mês: ${best.month} com R$ ${fmt(best.receita)}.`;
+    return msg;
+  }
+
+  if (q.includes("ticket") || q.includes("médio") || q.includes("medio")) {
+    return `Ticket médio atual: R$ ${fmt(data.stats.averageTicket)}.` +
+      (data.stats.averageTicketChange !== null
+        ? ` Variação de ${data.stats.averageTicketChange > 0 ? "+" : ""}${data.stats.averageTicketChange}% vs período anterior.`
+        : "");
   }
 
   if (q.includes("deal") || q.includes("negóci") || q.includes("negoci") || q.includes("fechei") || q.includes("ganho")) {
@@ -579,6 +765,7 @@ function processSmartQuery(question: string, data: DashboardData): string {
     const totalLost = wonLost.reduce((s, m) => s + m.perdidos, 0);
     return `Nos últimos 6 meses: ${totalWon} deals ganhos e ${totalLost} perdidos. ` +
       `Taxa de conversão atual: ${data.stats.conversionRate}%. ` +
+      `Total de deals no período: ${data.stats.totalDeals}. ` +
       `Deals ativos no pipeline: ${data.stats.dealsInPipeline}.`;
   }
 
@@ -601,14 +788,18 @@ function processSmartQuery(question: string, data: DashboardData): string {
     return `Distribuição do funil — ${stages}. Total de ${data.stats.dealsInPipeline} deals ativos.`;
   }
 
-  if (q.includes("tarefa") || q.includes("task") || q.includes("pendente")) {
-    return `Você tem ${data.stats.pendingTasks} tarefas pendentes no momento.`;
+  if (q.includes("tarefa") || q.includes("task") || q.includes("conclu")) {
+    return `Você concluiu ${data.stats.completedTasks} tarefas no período.` +
+      (data.stats.completedTasksChange !== null
+        ? ` Variação de ${data.stats.completedTasksChange > 0 ? "+" : ""}${data.stats.completedTasksChange}% vs anterior.`
+        : "");
   }
 
   // Generic fallback
-  return `Resumo atual: Receita R$ ${data.stats.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}, ` +
-    `${data.stats.dealsInPipeline} deals no pipeline, conversão de ${data.stats.conversionRate}%, ` +
-    `${data.stats.pendingTasks} tarefas pendentes. Faça uma pergunta mais específica sobre receita, deals, vendedores, perdas ou pipeline.`;
+  return `Resumo atual: Receita R$ ${fmt(data.stats.revenue)}, ` +
+    `${data.stats.totalDeals} deals no período, ${data.stats.dealsInPipeline} ativos no pipeline, ` +
+    `conversão ${data.stats.conversionRate}%, ticket médio R$ ${fmt(data.stats.averageTicket)}, ` +
+    `${data.stats.completedTasks} tarefas concluídas. Pergunte sobre receita, deals, vendedores, perdas ou pipeline.`;
 }
 
 // ─── Page ─────────────────────────────────────────────────────
@@ -724,6 +915,12 @@ export default function ReportsPage() {
         return <StageConversionReport data={state.data as StageRow[]} />;
       case "revenue-period":
         return <RevenuePeriodReport data={state.data as RevenueRow[]} />;
+      case "team-performance":
+        return <TeamPerformanceReport data={state.data as VendorRow[]} />;
+      case "activities":
+        return <ActivitiesReport data={state.data as ActivityRow[]} />;
+      case "revenue-forecast":
+        return <RevenueForecastReport data={state.data as ForecastRow[]} />;
       default:
         return (
           <div className="py-8 text-center text-sm text-[var(--text-secondary)]">

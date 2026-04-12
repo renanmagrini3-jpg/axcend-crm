@@ -142,7 +142,7 @@ export default function LoginPage() {
               </span>
             </label>
             <Link
-              href="/login"
+              href="/reset-password"
               className="text-sm text-orange-500 hover:text-orange-400 transition-colors"
             >
               Esqueceu a senha?

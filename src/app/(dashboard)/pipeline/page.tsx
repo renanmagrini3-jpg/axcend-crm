@@ -37,6 +37,12 @@ interface DealFromAPI {
   contacts: { id: string; name: string; email: string | null; phone: string | null } | null;
   companies: { id: string; name: string } | null;
   pipeline_stages: { id: string; name: string; order: number } | null;
+  organization_members: { id: string; name: string } | null;
+}
+
+interface MemberOption {
+  id: string;
+  name: string;
 }
 
 interface ContactOption {
@@ -68,7 +74,7 @@ function dealFromAPI(deal: DealFromAPI): DealCardData {
     priority: deal.priority as Priority,
     contactName: deal.contacts?.name ?? "—",
     companyName: deal.companies?.name,
-    assigneeName: "—",
+    assigneeName: deal.organization_members?.name ?? "—",
     createdAt: new Date(deal.created_at),
   };
 }
@@ -80,6 +86,7 @@ export default function PipelinePage() {
   const [deals, setDeals] = useState<DealFromAPI[]>([]);
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [members, setMembers] = useState<MemberOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [pipelineDropdownOpen, setPipelineDropdownOpen] = useState(false);
 
@@ -94,6 +101,7 @@ export default function PipelinePage() {
   const [newDealContactId, setNewDealContactId] = useState("");
   const [newDealCompanyId, setNewDealCompanyId] = useState("");
   const [newDealPriority, setNewDealPriority] = useState<Priority>("MEDIUM");
+  const [newDealAssigneeId, setNewDealAssigneeId] = useState("");
   const [newDealSubmitting, setNewDealSubmitting] = useState(false);
 
   const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId);
@@ -130,9 +138,10 @@ export default function PipelinePage() {
       setLoading(true);
 
       // Fetch contacts and companies in parallel
-      const [contactsRes, companiesRes] = await Promise.all([
+      const [contactsRes, companiesRes, membersRes] = await Promise.all([
         fetch("/api/contacts?limit=100"),
         fetch("/api/companies?limit=100"),
+        fetch("/api/team"),
       ]);
 
       if (contactsRes.ok) {
@@ -142,6 +151,10 @@ export default function PipelinePage() {
       if (companiesRes.ok) {
         const coData = await companiesRes.json();
         setCompanies(coData.data ?? []);
+      }
+      if (membersRes.ok) {
+        const mData = await membersRes.json();
+        setMembers((mData as MemberOption[]) ?? []);
       }
 
       let pipelineList = await fetchPipelines();
@@ -248,6 +261,7 @@ export default function PipelinePage() {
         priority: newDealPriority,
         contact_id: newDealContactId,
         company_id: newDealCompanyId || null,
+        assigned_to_id: newDealAssigneeId || null,
         pipeline_id: selectedPipeline.id,
         stage_id: firstStage.id,
       }),
@@ -263,6 +277,7 @@ export default function PipelinePage() {
       setNewDealValue("");
       setNewDealContactId("");
       setNewDealCompanyId("");
+      setNewDealAssigneeId("");
       setNewDealPriority("MEDIUM");
     }
   }, [
@@ -270,6 +285,7 @@ export default function PipelinePage() {
     newDealValue,
     newDealContactId,
     newDealCompanyId,
+    newDealAssigneeId,
     newDealPriority,
     selectedPipeline,
     stages,
@@ -450,6 +466,25 @@ export default function PipelinePage() {
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Assignee select */}
+          <div>
+            <label className="mb-1 block text-xs text-[var(--text-muted)]">
+              Responsável
+            </label>
+            <select
+              value={newDealAssigneeId}
+              onChange={(e) => setNewDealAssigneeId(e.target.value)}
+              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none"
+            >
+              <option value="">Nenhum</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
                 </option>
               ))}
             </select>
