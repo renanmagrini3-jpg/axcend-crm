@@ -50,6 +50,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
     origin?: string;
   };
 
+  if (email !== undefined && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.toString().trim())) {
+    return jsonError("E-mail inválido", 400);
+  }
+
+  if (phone !== undefined && phone && !/^[\d\s()+\-\.]+$/.test(phone.toString().trim())) {
+    return jsonError("Telefone inválido. Use apenas números, parênteses, hífens e +", 400);
+  }
+
   const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name.toString().trim();
   if (email !== undefined) updates.email = email?.toString().trim() || null;

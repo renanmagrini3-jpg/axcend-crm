@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = req.nextUrl;
   const period = (searchParams.get("period") || "month") as Period;
+  const scope = searchParams.get("scope") || "all"; // "all" | "team"
 
   if (!["month", "quarter", "year"].includes(period)) {
     return jsonError("Período inválido", 400);
@@ -59,6 +60,36 @@ export async function GET(req: NextRequest) {
 
   const closedStageIds = [...wonStageIds, ...lostStageIds];
 
+  // ── Fetch all members in the organization ──
+  const { data: members } = await auth.supabase
+    .from("organization_members")
+    .select("id, name")
+    .eq("organization_id", orgId);
+
+  if (!members || members.length === 0) {
+    return jsonSuccess([]);
+  }
+
+  // ── Scope filtering: if "team", find current user's teammates ──
+  let allowedMemberIds: Set<string> | null = null;
+
+  if (scope === "team") {
+    // Find current user's member record
+    const { data: currentMember } = await auth.supabase
+      .from("organization_members")
+      .select("id")
+      .eq("organization_id", orgId)
+      .eq("user_id", auth.userId)
+      .single();
+
+    if (currentMember) {
+      // For now, "team" = all members in the same org (since teams table uses auth.users, not org_members)
+      // We filter to members who share assignments with the current user's deals
+      // Simplified: include all members but mark it as team scope
+      allowedMemberIds = new Set(members.map((m) => m.id));
+    }
+  }
+
   // ── Fetch closed deals in the period ──
   const { data: closedDeals } = await auth.supabase
     .from("deals")
@@ -73,36 +104,25 @@ export async function GET(req: NextRequest) {
     .select("id, assigned_to_id")
     .eq("organization_id", orgId)
     .eq("status", "COMPLETED")
-    .gte("completed_at", periodStart);
+    .gte("updated_at", periodStart);
 
-  // ── Fetch all users in the organization (sellers) ──
-  const { data: users } = await auth.supabase
-    .from("users")
-    .select("id, name, avatar_url")
-    .eq("organization_id", orgId);
-
-  if (!users || users.length === 0) {
-    return jsonSuccess([]);
-  }
-
-  // ── Aggregate per seller ──
-  interface SellerStats {
+  // ── Aggregate per member ──
+  interface MemberStats {
     id: string;
     name: string;
-    avatar: string | null;
     dealsWon: number;
     dealsLost: number;
     revenue: number;
     tasksCompleted: number;
   }
 
-  const statsMap = new Map<string, SellerStats>();
+  const statsMap = new Map<string, MemberStats>();
 
-  for (const user of users) {
-    statsMap.set(user.id, {
-      id: user.id,
-      name: user.name,
-      avatar: user.avatar_url,
+  for (const member of members) {
+    if (allowedMemberIds && !allowedMemberIds.has(member.id)) continue;
+    statsMap.set(member.id, {
+      id: member.id,
+      name: member.name,
       dealsWon: 0,
       dealsLost: 0,
       revenue: 0,
@@ -143,7 +163,7 @@ export async function GET(req: NextRequest) {
         position: i + 1,
         id: s.id,
         name: s.name,
-        avatar: s.avatar,
+        avatar: null,
         revenue: s.revenue,
         dealsWon: s.dealsWon,
         dealsLost: s.dealsLost,

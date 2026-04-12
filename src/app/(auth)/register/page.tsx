@@ -147,11 +147,18 @@ export default function RegisterPage() {
         });
 
         if (!res.ok) {
-          const json = await res.json();
-          console.error("Failed to create organization:", json.error);
+          const json = await res.json().catch(() => ({}));
+          toast(
+            (json as { error?: string }).error || "Erro ao criar organização. Tente novamente.",
+            "error",
+          );
+          setLoading(false);
+          return;
         }
-      } catch (err) {
-        console.error("Failed to create organization:", err);
+      } catch {
+        toast("Erro ao criar organização. Verifique sua conexão e tente novamente.", "error");
+        setLoading(false);
+        return;
       }
     }
 

@@ -27,6 +27,14 @@ export async function GET(req: NextRequest) {
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
+  // Auto-mark overdue: PENDING tasks past their due date
+  await auth.supabase
+    .from("tasks")
+    .update({ status: "OVERDUE" })
+    .eq("organization_id", auth.organizationId)
+    .eq("status", "PENDING")
+    .lt("due_at", new Date().toISOString());
+
   let query = auth.supabase
     .from("tasks")
     .select("*, contacts(id, name)", { count: "exact" })

@@ -244,10 +244,10 @@ export default function RankingPage() {
   const [loading, setLoading] = useState(true);
 
   // Fetch ranking data
-  const fetchRanking = useCallback(async (p: Period) => {
+  const fetchRanking = useCallback(async (p: Period, s: Scope) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/ranking?period=${p}`);
+      const res = await fetch(`/api/ranking?period=${p}&scope=${s === "team" ? "team" : "all"}`);
       if (res.ok) {
         const data = await res.json();
         setSellers(data);
@@ -262,8 +262,8 @@ export default function RankingPage() {
   }, []);
 
   useEffect(() => {
-    fetchRanking(period);
-  }, [period, fetchRanking]);
+    fetchRanking(period, scope);
+  }, [period, scope, fetchRanking]);
 
   // Exit TV mode on ESC
   const handleKeyDown = useCallback((e: KeyboardEvent) => {

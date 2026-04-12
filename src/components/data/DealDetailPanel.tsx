@@ -10,6 +10,7 @@ import {
   StickyNote,
   Loader2,
   Send,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { overlay } from "@/lib/motion";
@@ -73,6 +74,7 @@ interface DealDetailPanelProps {
     stageId: string,
     lossReason?: string,
   ) => Promise<boolean>;
+  onDealDeleted?: (dealId: string) => void;
 }
 
 const priorityVariant: Record<Priority, "danger" | "warning" | "info"> = {
@@ -138,6 +140,7 @@ function DealDetailPanel({
   onClose,
   onDealUpdated,
   onMoveDeal,
+  onDealDeleted,
 }: DealDetailPanelProps) {
   const { toast } = useToast();
 
@@ -465,6 +468,27 @@ function DealDetailPanel({
     }
   }, [fullDeal, deal, noteInput, toast]);
 
+  // --- Delete deal ---
+
+  const handleDelete = useCallback(async () => {
+    const dealId = fullDeal?.id ?? deal?.id;
+    if (!dealId) return;
+    if (!window.confirm("Tem certeza que deseja excluir este deal? Esta ação não pode ser desfeita.")) return;
+    try {
+      const res = await fetch(`/api/deals/${dealId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        toast(json.error || "Erro ao excluir deal", "error");
+        return;
+      }
+      toast("Deal excluído", "success");
+      onDealDeleted?.(dealId);
+      onClose();
+    } catch {
+      toast("Erro de conexão", "error");
+    }
+  }, [fullDeal, deal, toast, onDealDeleted, onClose]);
+
   // --- Render ---
 
   const displayValue = fullDeal?.value ?? deal?.value ?? 0;
@@ -576,6 +600,14 @@ function DealDetailPanel({
                   onClick={openNewTask}
                 >
                   Adicionar Tarefa
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon={<Trash2 size={14} />}
+                  onClick={handleDelete}
+                >
+                  Excluir
                 </Button>
               </div>
 

@@ -13,6 +13,7 @@ import {
 import { PageContainer } from "@/components/layout";
 import { Button, Badge, Modal, Input, useToast } from "@/components/ui";
 import { DataTable, type Column } from "@/components/data";
+import { cn } from "@/lib/cn";
 
 // --- Types ---
 
@@ -27,6 +28,7 @@ interface ContactRow {
   organization_id: string;
   created_at: string;
   companies: { id: string; name: string } | null;
+  deals: { id: string }[] | null;
 }
 
 interface Pagination {
@@ -337,6 +339,22 @@ export default function ContactsPage() {
       key: "companies" as keyof ContactRow,
       label: "Empresa",
       render: (row) => row.companies?.name || "—",
+    },
+    {
+      key: "deals" as keyof ContactRow,
+      label: "Deals",
+      sortable: false,
+      render: (row) => {
+        const count = row.deals?.length ?? 0;
+        return (
+          <span className={cn(
+            "text-sm font-medium",
+            count > 0 ? "text-orange-500" : "text-[var(--text-muted)]",
+          )}>
+            {count}
+          </span>
+        );
+      },
     },
     {
       key: "origin" as keyof ContactRow,

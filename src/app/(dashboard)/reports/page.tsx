@@ -14,7 +14,6 @@ import {
   TrendingUp,
   Download,
   FileSpreadsheet,
-  FileText,
   ChevronDown,
   Loader2,
   Search,
@@ -869,10 +868,6 @@ export default function ReportsPage() {
     }
   }, [queryInput, apiPeriod]);
 
-  const handleExportPDF = useCallback(() => {
-    window.print();
-  }, []);
-
   const handleExportCSV = useCallback(() => {
     if (!expandedReport || !reports[expandedReport]?.data) return;
     const data = reports[expandedReport].data;
@@ -971,20 +966,11 @@ export default function ReportsPage() {
           <Button
             variant="secondary"
             size="sm"
-            icon={<FileText size={14} />}
-            onClick={handleExportPDF}
-            disabled={!expandedReport}
-          >
-            Exportar PDF
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
             icon={<FileSpreadsheet size={14} />}
             onClick={handleExportCSV}
             disabled={!expandedReport || !reports[expandedReport]?.data}
           >
-            Exportar Excel
+            Exportar CSV
           </Button>
         </div>
       </div>

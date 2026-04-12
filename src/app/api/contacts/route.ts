@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   let query = auth.supabase
     .from("contacts")
-    .select("*, companies(id, name)", { count: "exact" })
+    .select("*, companies(id, name), deals(id)", { count: "exact" })
     .eq("organization_id", auth.organizationId)
     .order(sortBy, { ascending: order })
     .range(from, to);
@@ -72,6 +72,14 @@ export async function POST(req: NextRequest) {
 
   if (!name || !name.toString().trim()) {
     return jsonError("Nome é obrigatório", 400);
+  }
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.toString().trim())) {
+    return jsonError("E-mail inválido", 400);
+  }
+
+  if (phone && !/^[\d\s()+\-\.]+$/.test(phone.toString().trim())) {
+    return jsonError("Telefone inválido. Use apenas números, parênteses, hífens e +", 400);
   }
 
   const { data, error } = await auth.supabase

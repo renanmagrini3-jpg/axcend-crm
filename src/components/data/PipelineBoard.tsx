@@ -8,7 +8,7 @@ import {
   type DropResult,
 } from "@hello-pangea/dnd";
 import { cn } from "@/lib/cn";
-import { Modal, Input } from "@/components/ui";
+import { Modal } from "@/components/ui";
 import { DealCard, type DealCardData } from "./DealCard";
 import { DealDetailPanel, type DealFromApi } from "./DealDetailPanel";
 
@@ -77,6 +77,7 @@ function PipelineBoard({
   // Loss reason modal
   const [lossModalOpen, setLossModalOpen] = useState(false);
   const [lossReason, setLossReason] = useState("");
+  const [lossReasonOptions, setLossReasonOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [pendingDrop, setPendingDrop] = useState<{
     dealId: string;
     sourceId: string;
@@ -165,6 +166,10 @@ function PipelineBoard({
           destIndex: destination.index,
         });
         setLossModalOpen(true);
+        fetch("/api/loss-reasons?active=true")
+          .then((r) => (r.ok ? r.json() : []))
+          .then((d) => setLossReasonOptions(d as Array<{ id: string; name: string }>))
+          .catch(() => {});
         return;
       }
 
@@ -364,11 +369,24 @@ function PipelineBoard({
         title="Motivo da Perda"
       >
         <div className="flex flex-col gap-4">
-          <Input
-            label="Por que o deal foi perdido?"
-            value={lossReason}
-            onChange={(e) => setLossReason(e.target.value)}
-          />
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">Motivo da perda *</label>
+            <select
+              value={lossReason}
+              onChange={(e) => setLossReason(e.target.value)}
+              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none transition-colors"
+            >
+              <option value="">Selecione um motivo</option>
+              {lossReasonOptions.map((r) => (
+                <option key={r.id} value={r.name}>{r.name}</option>
+              ))}
+            </select>
+            {lossReasonOptions.length === 0 && (
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                Nenhum motivo cadastrado. Cadastre em Configurações → Motivos de Perda.
+              </p>
+            )}
+          </div>
           <div className="flex justify-end gap-2">
             <button
               onClick={cancelLoss}
@@ -397,6 +415,16 @@ function PipelineBoard({
         onClose={() => setSelectedDealId(null)}
         onMoveDeal={onMoveDeal}
         onDealUpdated={onDealUpdated}
+        onDealDeleted={(dealId) => {
+          setDealsByStage((prev) => {
+            const next = { ...prev };
+            for (const stageId of Object.keys(next)) {
+              next[stageId] = next[stageId].filter((d) => d.id !== dealId);
+            }
+            return next;
+          });
+          setSelectedDealId(null);
+        }}
       />
     </>
   );
