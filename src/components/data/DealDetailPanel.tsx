@@ -270,7 +270,6 @@ function DealDetailPanel({
   }, []);
 
   const openEdit = useCallback(async () => {
-    console.log("openEdit clicado", { deal, fullDeal });
     let data = fullDeal;
     if (!data && deal) {
       data = await loadFullDeal(deal.id);
@@ -323,7 +322,6 @@ function DealDetailPanel({
   // --- Move stage ---
 
   const openMove = useCallback(async () => {
-    console.log("openMove clicado", { deal, fullDeal });
     let data = fullDeal;
     if (!data && deal) {
       data = await loadFullDeal(deal.id);
@@ -346,7 +344,6 @@ function DealDetailPanel({
   }, [fullDeal, deal, loadFullDeal]);
 
   const openNewTask = useCallback(async () => {
-    console.log("openNewTask clicado", { deal, fullDeal });
     if (!fullDeal && deal) {
       await loadFullDeal(deal.id);
     }
@@ -432,7 +429,6 @@ function DealDetailPanel({
   // --- Add note ---
 
   const handleAddNote = useCallback(async () => {
-    console.log("handleAddNote clicado", { deal, fullDeal, noteInput });
     const dealId = fullDeal?.id ?? deal?.id;
     if (!dealId || !noteInput.trim()) return;
     setSavingNote(true);

@@ -34,7 +34,8 @@
       "Bash(ls:*)",
       "Bash(mkdir -p \"C:/Users/Renan/axcend-crm/src/app/api/custom-fields/[id]\")",
       "Bash(mkdir -p \"C:/Users/Renan/axcend-crm/src/app/api/lead-distribution/[id]\")",
-      "Bash(powershell -c \"Get-Content 'supabase/migration-007-settings-remaining.sql' -Raw -Encoding UTF8 | Set-Clipboard\")"
+      "Bash(powershell -c \"Get-Content 'supabase/migration-007-settings-remaining.sql' -Raw -Encoding UTF8 | Set-Clipboard\")",
+      "Bash(grep -n \"Ã\\\\|Ã£\\\\|Ã©\\\\|Ã§\\\\|Ã³\\\\|Â\\\\|Ê\\\\|ï\" /c/Users/Renan/axcend-crm/supabase/*.sql)"
     ]
   }
 }

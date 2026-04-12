@@ -38,7 +38,7 @@ import { PageContainer } from "@/components/layout";
 import { Card, Badge } from "@/components/ui";
 import { createBrowserClient } from "@/lib/supabase/client";
 import { StatCard } from "@/components/data/StatCard";
-import { staggerContainer, staggerChild, fadeInUp } from "@/lib/motion";
+import { staggerContainer, staggerChild } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 
 // ─── Period selector ───────────────────────────────────────────
