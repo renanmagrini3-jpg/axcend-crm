@@ -234,6 +234,13 @@ export default function OnboardingPage() {
         return;
       }
 
+      // After creating the org, the server sets organization_id in user metadata.
+      // We must refresh the session so the JWT cookie includes the new org_id,
+      // otherwise subsequent API calls fail due to RLS (get_user_org_id() = NULL).
+      if (!existingOrg) {
+        await supabase.auth.refreshSession();
+      }
+
       // Re-fetch org + pipeline to sync state (POST may have created default pipeline)
       const orgRes = await fetch("/api/organizations/current");
       if (orgRes.ok) {
@@ -261,7 +268,7 @@ export default function OnboardingPage() {
     } finally {
       setSaving(false);
     }
-  }, [orgName, mode, existingOrg, toast]);
+  }, [orgName, mode, existingOrg, supabase, toast]);
 
   // --- Step 2 save (pipeline + stages diff) ---
 
