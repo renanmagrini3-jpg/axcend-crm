@@ -2,19 +2,20 @@ import { NextRequest } from "next/server";
 import {
   getAuthContext,
   isErrorResponse,
-  jsonError,
   jsonSuccess,
 } from "@/lib/api-utils";
+import { sanitizeSearch } from "@/lib/sanitize";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext();
   if (isErrorResponse(auth)) return auth;
 
-  const q = req.nextUrl.searchParams.get("q")?.trim();
-  if (!q || q.length < 2) {
+  const raw = req.nextUrl.searchParams.get("q")?.trim();
+  if (!raw || raw.length < 2) {
     return jsonSuccess({ deals: [], contacts: [], companies: [] });
   }
 
+  const q = sanitizeSearch(raw);
   const orgId = auth.organizationId;
   const pattern = `%${q}%`;
 

@@ -5,6 +5,7 @@ import {
   jsonError,
   jsonSuccess,
 } from "@/lib/api-utils";
+import { sanitizeSearch } from "@/lib/sanitize";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext();
@@ -29,8 +30,9 @@ export async function GET(req: NextRequest) {
     .range(from, to);
 
   if (search) {
+    const s = sanitizeSearch(search);
     query = query.or(
-      `name.ilike.%${search}%,email.ilike.%${search}%`,
+      `name.ilike.%${s}%,email.ilike.%${s}%`,
     );
   }
   if (origin) {

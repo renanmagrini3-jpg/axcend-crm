@@ -5,6 +5,7 @@ import {
   jsonError,
   jsonSuccess,
 } from "@/lib/api-utils";
+import { sanitizeSearch } from "@/lib/sanitize";
 
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext();
@@ -51,7 +52,8 @@ export async function GET(req: NextRequest) {
   if (dateTo) query = query.lte("due_at", dateTo);
 
   if (search) {
-    query = query.or(`title.ilike.%${search}%`);
+    const s = sanitizeSearch(search);
+    query = query.or(`title.ilike.%${s}%`);
   }
 
   const { data, error, count } = await query;

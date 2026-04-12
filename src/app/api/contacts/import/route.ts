@@ -4,6 +4,7 @@ import {
   isErrorResponse,
   jsonError,
 } from "@/lib/api-utils";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 function parseCsvLine(line: string): string[] {
   const fields: string[] = [];
@@ -74,7 +75,16 @@ const FIELD_MAP: Record<string, string> = {
   "company_name": "company",
 };
 
+const MAX_CSV_SIZE = 5 * 1024 * 1024; // 5MB
+
 export async function POST(req: NextRequest) {
+  // Rate limit: 10 imports per minute per IP
+  const ip = getClientIp(req.headers);
+  const rl = checkRateLimit(`csv-import:${ip}`, { limit: 10, windowSeconds: 60 });
+  if (!rl.allowed) {
+    return jsonError("Muitas requisições. Tente novamente em instantes.", 429);
+  }
+
   const auth = await getAuthContext();
   if (isErrorResponse(auth)) return auth;
 
@@ -83,6 +93,10 @@ export async function POST(req: NextRequest) {
 
   if (!file) {
     return jsonError("Arquivo CSV é obrigatório", 400);
+  }
+
+  if (file.size > MAX_CSV_SIZE) {
+    return jsonError("Arquivo muito grande. Máximo 5MB.", 400);
   }
 
   const text = await file.text();
