@@ -7,6 +7,7 @@ import {
   Trash2,
   Pencil,
   Building2,
+  Download,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout";
 import { Button, Badge, Modal, Input, useToast } from "@/components/ui";
@@ -63,6 +64,8 @@ export default function CompaniesPage() {
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterSegment, setFilterSegment] = useState("");
+  const [filterSize, setFilterSize] = useState("");
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
     limit: 10,
@@ -85,6 +88,33 @@ export default function CompaniesPage() {
   const [formWebsite, setFormWebsite] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
 
+  async function handleExportAll() {
+    try {
+      const res = await fetch(`/api/companies?limit=5000`);
+      const json = await res.json();
+      if (!res.ok || !json.data?.length) {
+        toast("Nenhuma empresa para exportar", "warning");
+        return;
+      }
+      const headers = ["Nome", "CNPJ", "Segmento", "Tamanho", "Website", "Contatos", "Criado em"];
+      const rows = (json.data as CompanyRow[]).map((c) => [
+        c.name, c.cnpj || "", c.segment || "", c.size || "",
+        c.website || "", String(c.contact_count), new Date(c.created_at).toLocaleDateString("pt-BR"),
+      ]);
+      const csv = [headers, ...rows].map((r) => r.map((v) => `"${v}"`).join(";")).join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `empresas-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast(`${json.data.length} empresas exportadas!`, "success");
+    } catch {
+      toast("Erro ao exportar", "error");
+    }
+  }
+
   const fetchCompanies = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams({
@@ -92,6 +122,8 @@ export default function CompaniesPage() {
       limit: pagination.limit.toString(),
       search,
     });
+    if (filterSegment) params.set("segment", filterSegment);
+    if (filterSize) params.set("size", filterSize);
 
     try {
       const res = await fetch(`/api/companies?${params}`);
@@ -109,7 +141,7 @@ export default function CompaniesPage() {
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, search, toast]);
+  }, [pagination.page, pagination.limit, search, filterSegment, filterSize, toast]);
 
   useEffect(() => {
     fetchCompanies();
@@ -270,6 +302,25 @@ export default function CompaniesPage() {
         ),
     },
     {
+      key: "website" as keyof CompanyRow,
+      label: "Website",
+      sortable: false,
+      render: (row) =>
+        row.website ? (
+          <a
+            href={row.website.startsWith("http") ? row.website : `https://${row.website}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-orange-500 hover:text-orange-400 transition-colors truncate max-w-[120px] inline-block"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {row.website.replace(/^https?:\/\//, "")}
+          </a>
+        ) : (
+          "—"
+        ),
+    },
+    {
       key: "contact_count" as keyof CompanyRow,
       label: "Contatos",
       render: (row) => (
@@ -414,7 +465,44 @@ export default function CompaniesPage() {
           />
         </div>
 
+        <select
+          value={filterSegment}
+          onChange={(e) => {
+            setFilterSegment(e.target.value);
+            setPagination((p) => ({ ...p, page: 1 }));
+          }}
+          className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none"
+        >
+          <option value="">Todos segmentos</option>
+          {SEGMENTS.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+
+        <select
+          value={filterSize}
+          onChange={(e) => {
+            setFilterSize(e.target.value);
+            setPagination((p) => ({ ...p, page: 1 }));
+          }}
+          className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none"
+        >
+          <option value="">Todos tamanhos</option>
+          {SIZES.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+
         <div className="flex-1" />
+
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Download size={14} />}
+          onClick={handleExportAll}
+        >
+          Exportar Todos
+        </Button>
 
         <Button
           variant="primary"

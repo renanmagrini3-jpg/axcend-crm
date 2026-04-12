@@ -12,6 +12,8 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = req.nextUrl;
   const search = searchParams.get("search") || "";
+  const segment = searchParams.get("segment") || "";
+  const size = searchParams.get("size") || "";
   const page = Math.max(1, Number(searchParams.get("page") || "1"));
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") || "20")));
   const sortBy = searchParams.get("sortBy") || "created_at";
@@ -31,6 +33,13 @@ export async function GET(req: NextRequest) {
     query = query.or(
       `name.ilike.%${search}%,cnpj.ilike.%${search}%,segment.ilike.%${search}%`,
     );
+  }
+
+  if (segment) {
+    query = query.eq("segment", segment);
+  }
+  if (size) {
+    query = query.eq("size", size);
   }
 
   const { data, error, count } = await query;

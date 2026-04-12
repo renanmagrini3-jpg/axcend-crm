@@ -69,6 +69,9 @@ const FIELD_MAP: Record<string, string> = {
   origem: "origin",
   origin: "origin",
   source: "origin",
+  empresa: "company",
+  company: "company",
+  "company_name": "company",
 };
 
 export async function POST(req: NextRequest) {
@@ -89,7 +92,7 @@ export async function POST(req: NextRequest) {
     return jsonError("Arquivo CSV vazio ou inválido", 400);
   }
 
-  const contacts = rows
+  const mappedRows = rows
     .map((row) => {
       const mapped: Record<string, string> = {};
       for (const [key, value] of Object.entries(row)) {
@@ -100,15 +103,49 @@ export async function POST(req: NextRequest) {
       }
       return mapped;
     })
-    .filter((c) => c.name?.trim())
-    .map((c) => ({
-      name: c.name.trim(),
-      email: c.email?.trim() || null,
-      phone: c.phone?.trim() || null,
-      position: c.position?.trim() || null,
-      origin: c.origin?.trim() || null,
-      organization_id: auth.organizationId,
-    }));
+    .filter((c) => c.name?.trim());
+
+  // Resolve company names to IDs
+  const companyNames = [...new Set(
+    mappedRows.map((c) => c.company?.trim()).filter(Boolean) as string[],
+  )];
+
+  const companyIdMap = new Map<string, string>();
+
+  if (companyNames.length > 0) {
+    // Fetch existing companies
+    const { data: existingCompanies } = await auth.supabase
+      .from("companies")
+      .select("id, name")
+      .eq("organization_id", auth.organizationId)
+      .in("name", companyNames);
+
+    for (const co of existingCompanies || []) {
+      companyIdMap.set(co.name.toLowerCase(), co.id);
+    }
+
+    // Create missing companies
+    const missing = companyNames.filter((n) => !companyIdMap.has(n.toLowerCase()));
+    if (missing.length > 0) {
+      const { data: created } = await auth.supabase
+        .from("companies")
+        .insert(missing.map((n) => ({ name: n, organization_id: auth.organizationId })))
+        .select("id, name");
+      for (const co of created || []) {
+        companyIdMap.set(co.name.toLowerCase(), co.id);
+      }
+    }
+  }
+
+  const contacts = mappedRows.map((c) => ({
+    name: c.name.trim(),
+    email: c.email?.trim() || null,
+    phone: c.phone?.trim() || null,
+    position: c.position?.trim() || null,
+    origin: c.origin?.trim() || null,
+    company_id: c.company ? (companyIdMap.get(c.company.trim().toLowerCase()) || null) : null,
+    organization_id: auth.organizationId,
+  }));
 
   if (contacts.length === 0) {
     return jsonError("Nenhum contato válido encontrado no CSV", 400);

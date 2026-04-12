@@ -113,7 +113,13 @@ interface ForecastRow {
   stage: string;
 }
 
-type ReportData = VendorRow[] | OriginRow[] | LossRow[] | StageRow[] | RevenueRow[] | ActivityRow[] | ForecastRow[];
+interface ResponseTimeRow {
+  name: string;
+  hoursToRespond: number;
+  bucket: string;
+}
+
+type ReportData = VendorRow[] | OriginRow[] | LossRow[] | StageRow[] | RevenueRow[] | ActivityRow[] | ForecastRow[] | ResponseTimeRow[];
 
 interface ReportState {
   loading: boolean;
@@ -708,6 +714,43 @@ function RevenueForecastReport({ data }: { data: ForecastRow[] }) {
   );
 }
 
+function ResponseTimeReport({ data }: { data: ResponseTimeRow[] }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border-default)]">
+              <th className="pb-3 pr-4 text-xs font-medium text-[var(--text-secondary)]">Deal</th>
+              <th className="pb-3 pr-4 text-right text-xs font-medium text-[var(--text-secondary)]">Tempo (horas)</th>
+              <th className="pb-3 text-right text-xs font-medium text-[var(--text-secondary)]">Faixa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row) => (
+              <tr key={row.name} className="border-b border-[var(--border-default)] last:border-0">
+                <td className="py-3 pr-4 font-medium text-[var(--text-primary)]">{row.name}</td>
+                <td className="py-3 pr-4 text-right text-[var(--text-primary)]">{row.hoursToRespond}h</td>
+                <td className="py-3 text-right">
+                  <span className={cn(
+                    "rounded-full px-2 py-0.5 text-xs font-medium",
+                    row.bucket === "< 1h" ? "bg-emerald-500/10 text-emerald-500"
+                      : row.bucket === "1-4h" ? "bg-blue-500/10 text-blue-500"
+                      : row.bucket === "4-24h" ? "bg-amber-500/10 text-amber-500"
+                      : "bg-red-500/10 text-red-500",
+                  )}>
+                    {row.bucket}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Smart Query Engine ───────────────────────────────────────
 
 interface DashboardData {
@@ -916,6 +959,8 @@ export default function ReportsPage() {
         return <ActivitiesReport data={state.data as ActivityRow[]} />;
       case "revenue-forecast":
         return <RevenueForecastReport data={state.data as ForecastRow[]} />;
+      case "response-time":
+        return <ResponseTimeReport data={state.data as ResponseTimeRow[]} />;
       default:
         return (
           <div className="py-8 text-center text-sm text-[var(--text-secondary)]">

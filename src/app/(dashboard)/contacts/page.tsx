@@ -63,6 +63,7 @@ export default function ContactsPage() {
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterOrigin, setFilterOrigin] = useState("");
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
     limit: 10,
@@ -108,6 +109,7 @@ export default function ContactsPage() {
       limit: pagination.limit.toString(),
       search,
     });
+    if (filterOrigin) params.set("origin", filterOrigin);
 
     try {
       const res = await fetch(`/api/contacts?${params}`);
@@ -125,7 +127,7 @@ export default function ContactsPage() {
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, search, toast]);
+  }, [pagination.page, pagination.limit, search, filterOrigin, toast]);
 
   useEffect(() => {
     fetchContacts();
@@ -263,14 +265,9 @@ export default function ContactsPage() {
     setShowEditModal(true);
   }
 
-  function handleExport() {
-    if (contacts.length === 0) {
-      toast("Nenhum contato para exportar", "warning");
-      return;
-    }
-
+  function downloadCsv(data: ContactRow[], filename: string) {
     const headers = ["Nome", "Email", "Telefone", "Cargo", "Empresa", "Origem", "Criado em"];
-    const rows = contacts.map((c) => [
+    const rows = data.map((c) => [
       c.name,
       c.email || "",
       c.phone || "",
@@ -280,15 +277,38 @@ export default function ContactsPage() {
       new Date(c.created_at).toLocaleDateString("pt-BR"),
     ]);
 
-    const csv = [headers, ...rows].map((r) => r.map((v) => `"${v}"`).join(",")).join("\n");
+    const csv = [headers, ...rows].map((r) => r.map((v) => `"${v}"`).join(";")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `contatos-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function handleExport() {
+    if (contacts.length === 0) {
+      toast("Nenhum contato para exportar", "warning");
+      return;
+    }
+    downloadCsv(contacts, `contatos-pagina-${new Date().toISOString().slice(0, 10)}.csv`);
     toast("CSV exportado!", "success");
+  }
+
+  async function handleExportAll() {
+    try {
+      const res = await fetch(`/api/contacts?limit=5000`);
+      const json = await res.json();
+      if (!res.ok || !json.data?.length) {
+        toast("Nenhum contato para exportar", "warning");
+        return;
+      }
+      downloadCsv(json.data as ContactRow[], `contatos-todos-${new Date().toISOString().slice(0, 10)}.csv`);
+      toast(`${json.data.length} contatos exportados!`, "success");
+    } catch {
+      toast("Erro ao exportar", "error");
+    }
   }
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -334,6 +354,12 @@ export default function ContactsPage() {
       label: "Telefone",
       sortable: false,
       render: (row) => row.phone || "—",
+    },
+    {
+      key: "position" as keyof ContactRow,
+      label: "Cargo",
+      sortable: false,
+      render: (row) => row.position || "—",
     },
     {
       key: "companies" as keyof ContactRow,
@@ -510,6 +536,20 @@ export default function ContactsPage() {
           />
         </div>
 
+        <select
+          value={filterOrigin}
+          onChange={(e) => {
+            setFilterOrigin(e.target.value);
+            setPagination((p) => ({ ...p, page: 1 }));
+          }}
+          className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none"
+        >
+          <option value="">Todas origens</option>
+          {ORIGINS.map((o) => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
+
         <div className="flex-1" />
 
         <Button
@@ -519,6 +559,14 @@ export default function ContactsPage() {
           onClick={handleExport}
         >
           Exportar
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Download size={14} />}
+          onClick={handleExportAll}
+        >
+          Exportar Todos
         </Button>
 
         <input

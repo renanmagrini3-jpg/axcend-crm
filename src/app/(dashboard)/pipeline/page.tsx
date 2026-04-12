@@ -75,6 +75,8 @@ function dealFromAPI(deal: DealFromAPI): DealCardData {
     contactName: deal.contacts?.name ?? "—",
     companyName: deal.companies?.name,
     assigneeName: deal.organization_members?.name ?? "—",
+    lossReason: deal.loss_reason,
+    stageName: deal.pipeline_stages?.name,
     createdAt: new Date(deal.created_at),
   };
 }

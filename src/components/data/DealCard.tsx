@@ -15,6 +15,8 @@ export interface DealCardData {
   companyName?: string;
   assigneeName: string;
   assigneeAvatar?: string;
+  lossReason?: string | null;
+  stageName?: string;
   createdAt: Date;
 }
 
@@ -80,6 +82,12 @@ function DealCard({ deal, onClick }: DealCardProps) {
       <p className="mt-2 text-lg font-bold text-[var(--text-primary)]">
         {formatCurrency(deal.value)}
       </p>
+
+      {deal.stageName === "Fechado Perdido" && deal.lossReason && (
+        <p className="mt-1.5 truncate rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-400">
+          {deal.lossReason}
+        </p>
+      )}
 
       <div className="mt-3 flex items-center justify-between">
         <div className="flex items-center gap-1.5">

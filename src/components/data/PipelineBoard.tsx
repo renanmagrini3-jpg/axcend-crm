@@ -325,6 +325,11 @@ function PipelineBoard({
                         snapshot.isDraggingOver && "bg-orange-500/5",
                       )}
                     >
+                      {deals.length === 0 && !snapshot.isDraggingOver && (
+                        <div className="flex flex-col items-center justify-center py-6 text-center">
+                          <p className="text-xs text-[var(--text-muted)]">Nenhum deal nesta etapa</p>
+                        </div>
+                      )}
                       {deals.map((deal, index) => (
                         <Draggable
                           key={deal.id}

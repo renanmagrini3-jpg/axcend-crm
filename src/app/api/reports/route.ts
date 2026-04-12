@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
     case "revenue-period":
       return await revenuePeriod(auth, orgId, wonStageIds);
     case "response-time":
-      return responseTime();
+      return await responseTime(auth, orgId, periodStart);
     case "team-performance":
       return await teamPerformance(auth, orgId, periodStart, wonStageIds, lostStageIds);
     case "activities":
@@ -344,13 +344,95 @@ async function revenuePeriod(
   return jsonSuccess({ type: "revenue-period", data: rows });
 }
 
-// ─── Response Time (placeholder) ─────────────────────────────
+// ─── Response Time ───────────────────────────────────────────
 
-function responseTime() {
+async function responseTime(
+  auth: { supabase: Awaited<ReturnType<typeof import("@/lib/supabase/server").createServerClient>> },
+  orgId: string,
+  periodStart: string,
+) {
+  // Get deals created in the period
+  const { data: deals } = await auth.supabase
+    .from("deals")
+    .select("id, title, created_at")
+    .eq("organization_id", orgId)
+    .gte("created_at", periodStart);
+
+  if (!deals || deals.length === 0) {
+    return jsonSuccess({
+      type: "response-time",
+      data: [],
+      message: "Nenhum deal encontrado no período para calcular tempo de resposta.",
+    });
+  }
+
+  // Get first completed task per deal
+  const dealIds = deals.map((d) => d.id);
+  const { data: tasks } = await auth.supabase
+    .from("tasks")
+    .select("deal_id, completed_at, updated_at, status")
+    .eq("organization_id", orgId)
+    .in("deal_id", dealIds)
+    .eq("status", "COMPLETED")
+    .order("updated_at", { ascending: true });
+
+  // Map: deal_id → first completed task time
+  const firstCompletion = new Map<string, string>();
+  for (const t of tasks || []) {
+    if (t.deal_id && !firstCompletion.has(t.deal_id)) {
+      firstCompletion.set(t.deal_id, t.completed_at || t.updated_at);
+    }
+  }
+
+  // Calculate response times in hours
+  const responseTimes: number[] = [];
+  const rows: { name: string; hoursToRespond: number; bucket: string }[] = [];
+
+  for (const deal of deals) {
+    const completedAt = firstCompletion.get(deal.id);
+    if (!completedAt) continue;
+
+    const diffMs = new Date(completedAt).getTime() - new Date(deal.created_at).getTime();
+    const hours = Math.max(0, diffMs / (1000 * 60 * 60));
+    responseTimes.push(hours);
+
+    let bucket: string;
+    if (hours < 1) bucket = "< 1h";
+    else if (hours < 4) bucket = "1-4h";
+    else if (hours < 24) bucket = "4-24h";
+    else bucket = "> 24h";
+
+    rows.push({ name: deal.title, hoursToRespond: Math.round(hours * 10) / 10, bucket });
+  }
+
+  if (responseTimes.length === 0) {
+    return jsonSuccess({
+      type: "response-time",
+      data: [],
+      message: "Nenhuma tarefa concluída vinculada a deals no período.",
+    });
+  }
+
+  responseTimes.sort((a, b) => a - b);
+  const avg = responseTimes.reduce((s, v) => s + v, 0) / responseTimes.length;
+  const median = responseTimes[Math.floor(responseTimes.length / 2)];
+
+  const buckets = { "< 1h": 0, "1-4h": 0, "4-24h": 0, "> 24h": 0 };
+  for (const r of rows) {
+    buckets[r.bucket as keyof typeof buckets]++;
+  }
+
+  const distribution = Object.entries(buckets).map(([faixa, count]) => ({ faixa, count }));
+
   return jsonSuccess({
     type: "response-time",
-    data: [],
-    message: "Relatório de tempo de resposta requer rastreamento de atividades. Dados insuficientes.",
+    data: rows.sort((a, b) => a.hoursToRespond - b.hoursToRespond),
+    summary: {
+      avgHours: Math.round(avg * 10) / 10,
+      medianHours: Math.round(median * 10) / 10,
+      totalDeals: responseTimes.length,
+    },
+    distribution,
   });
 }
 

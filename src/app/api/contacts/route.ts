@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = req.nextUrl;
   const search = searchParams.get("search") || "";
+  const origin = searchParams.get("origin") || "";
   const page = Math.max(1, Number(searchParams.get("page") || "1"));
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") || "20")));
   const sortBy = searchParams.get("sortBy") || "created_at";
@@ -31,6 +32,9 @@ export async function GET(req: NextRequest) {
     query = query.or(
       `name.ilike.%${search}%,email.ilike.%${search}%`,
     );
+  }
+  if (origin) {
+    query = query.eq("origin", origin);
   }
 
   const { data, error, count } = await query;
@@ -80,6 +84,30 @@ export async function POST(req: NextRequest) {
 
   if (phone && !/^[\d\s()+\-\.]+$/.test(phone.toString().trim())) {
     return jsonError("Telefone inválido. Use apenas números, parênteses, hífens e +", 400);
+  }
+
+  // Duplicate detection
+  if (email?.trim()) {
+    const { data: existing } = await auth.supabase
+      .from("contacts")
+      .select("id")
+      .eq("organization_id", auth.organizationId)
+      .eq("email", email.toString().trim())
+      .limit(1);
+    if (existing && existing.length > 0) {
+      return jsonError("Contato com este e-mail já existe", 409);
+    }
+  }
+  if (phone?.trim()) {
+    const { data: existing } = await auth.supabase
+      .from("contacts")
+      .select("id")
+      .eq("organization_id", auth.organizationId)
+      .eq("phone", phone.toString().trim())
+      .limit(1);
+    if (existing && existing.length > 0) {
+      return jsonError("Contato com este telefone já existe", 409);
+    }
   }
 
   const { data, error } = await auth.supabase
