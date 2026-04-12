@@ -48,6 +48,17 @@ const originVariant: Record<string, "info" | "success" | "warning" | "default"> 
   "LinkedIn": "info",
 };
 
+function formatPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return raw;
+}
+
 const ORIGINS: OriginLabel[] = [
   "Facebook Ads",
   "Google Ads",
@@ -353,7 +364,7 @@ export default function ContactsPage() {
       key: "phone" as keyof ContactRow,
       label: "Telefone",
       sortable: false,
-      render: (row) => row.phone || "—",
+      render: (row) => row.phone ? formatPhone(row.phone) : "—",
     },
     {
       key: "position" as keyof ContactRow,

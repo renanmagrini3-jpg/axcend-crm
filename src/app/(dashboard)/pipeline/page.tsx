@@ -96,6 +96,11 @@ export default function PipelinePage() {
   const [filterPriority, setFilterPriority] = useState<Priority | "ALL">("ALL");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // New pipeline modal
+  const [newPipelineOpen, setNewPipelineOpen] = useState(false);
+  const [newPipelineName, setNewPipelineName] = useState("");
+  const [newPipelineSubmitting, setNewPipelineSubmitting] = useState(false);
+
   // New deal modal
   const [newDealOpen, setNewDealOpen] = useState(false);
   const [newDealTitle, setNewDealTitle] = useState("");
@@ -293,6 +298,28 @@ export default function PipelinePage() {
     stages,
   ]);
 
+  // --- Create new pipeline ---
+  const handleCreatePipeline = useCallback(async () => {
+    if (!newPipelineName.trim()) return;
+    setNewPipelineSubmitting(true);
+    try {
+      const res = await fetch("/api/pipelines", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newPipelineName.trim() }),
+      });
+      if (res.ok) {
+        const created = (await res.json()) as PipelineData;
+        setPipelines((prev) => [...prev, created]);
+        setSelectedPipelineId(created.id);
+        setDeals([]);
+        setNewPipelineOpen(false);
+        setNewPipelineName("");
+      }
+    } catch { /* ignore */ }
+    setNewPipelineSubmitting(false);
+  }, [newPipelineName]);
+
   // Auto-fill company when contact is selected
   useEffect(() => {
     if (newDealContactId) {
@@ -350,6 +377,17 @@ export default function PipelinePage() {
                     {p.name}
                   </button>
                 ))}
+                <hr className="my-1 border-[var(--border-default)]" />
+                <button
+                  onClick={() => {
+                    setPipelineDropdownOpen(false);
+                    setNewPipelineOpen(true);
+                    setNewPipelineName("");
+                  }}
+                  className="block w-full px-3 py-2 text-left text-sm font-medium text-orange-500 hover:bg-[var(--bg-elevated)] transition-colors"
+                >
+                  + Novo Pipeline
+                </button>
               </div>
             </>
           )}
@@ -529,6 +567,36 @@ export default function PipelinePage() {
               className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
             >
               {newDealSubmitting ? "Criando..." : "Criar Deal"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+      {/* New Pipeline Modal */}
+      <Modal
+        open={newPipelineOpen}
+        onClose={() => setNewPipelineOpen(false)}
+        title="Novo Pipeline"
+      >
+        <div className="flex flex-col gap-4">
+          <Input
+            label="Nome do Pipeline"
+            value={newPipelineName}
+            onChange={(e) => setNewPipelineName(e.target.value)}
+            placeholder="Ex: Pipeline Enterprise"
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setNewPipelineOpen(false)}
+              className="rounded-lg px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleCreatePipeline}
+              disabled={!newPipelineName.trim() || newPipelineSubmitting}
+              className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+            >
+              {newPipelineSubmitting ? "Criando..." : "Criar Pipeline"}
             </button>
           </div>
         </div>

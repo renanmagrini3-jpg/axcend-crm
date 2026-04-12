@@ -44,6 +44,14 @@ const sizeVariant: Record<string, "default" | "info" | "success"> = {
 
 const SIZES: CompanySize[] = ["Pequena", "Média", "Grande"];
 
+function formatCnpj(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 14) {
+    return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
+  }
+  return raw;
+}
+
 const SEGMENTS = [
   "Tecnologia",
   "SaaS",
@@ -282,7 +290,7 @@ export default function CompaniesPage() {
       key: "cnpj" as keyof CompanyRow,
       label: "CNPJ",
       sortable: false,
-      render: (row) => row.cnpj || "—",
+      render: (row) => row.cnpj ? formatCnpj(row.cnpj) : "—",
     },
     {
       key: "segment" as keyof CompanyRow,

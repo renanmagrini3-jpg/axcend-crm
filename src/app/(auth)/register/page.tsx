@@ -411,25 +411,18 @@ export default function RegisterPage() {
         </div>
 
         {/* SSO */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-3">
           <Button
             variant="secondary"
             size="md"
             icon={<GoogleIcon />}
             onClick={() => handleOAuth("google")}
             type="button"
+            className="w-full"
           >
-            Google
+            Continuar com Google
           </Button>
-          <Button
-            variant="secondary"
-            size="md"
-            icon={<MicrosoftIcon />}
-            onClick={() => handleOAuth("azure")}
-            type="button"
-          >
-            Microsoft
-          </Button>
+          {/* TODO: Habilitar Microsoft quando Azure estiver configurado */}
         </div>
 
         {/* Login link */}

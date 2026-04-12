@@ -88,14 +88,26 @@ export async function POST(req: NextRequest) {
     return jsonError("Nome é obrigatório", 400);
   }
 
+  // Validate CNPJ format (14 digits)
+  const cleanCnpj = cnpj?.toString().replace(/\D/g, "") || null;
+  if (cleanCnpj && cleanCnpj.length !== 14) {
+    return jsonError("CNPJ deve ter 14 dígitos", 400);
+  }
+
+  // Auto-prefix website
+  let cleanWebsite = website?.toString().trim() || null;
+  if (cleanWebsite && !/^https?:\/\//i.test(cleanWebsite)) {
+    cleanWebsite = `https://${cleanWebsite}`;
+  }
+
   const { data, error } = await auth.supabase
     .from("companies")
     .insert({
       name: name.toString().trim(),
-      cnpj: cnpj?.toString().trim() || null,
+      cnpj: cleanCnpj,
       segment: segment?.toString().trim() || null,
       size: size?.toString().trim() || null,
-      website: website?.toString().trim() || null,
+      website: cleanWebsite,
       organization_id: auth.organizationId,
     })
     .select()

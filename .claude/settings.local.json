@@ -38,7 +38,8 @@
       "Bash(grep -n \"Ã\\\\|Ã£\\\\|Ã©\\\\|Ã§\\\\|Ã³\\\\|Â\\\\|Ê\\\\|ï\" /c/Users/Renan/axcend-crm/supabase/*.sql)",
       "Bash(xargs grep:*)",
       "Bash(grep:*)",
-      "Bash(powershell -c \"Get-Content 'supabase/migration-008-deals-assignee-fk.sql' -Raw -Encoding UTF8 | Set-Clipboard\")"
+      "Bash(powershell -c \"Get-Content 'supabase/migration-008-deals-assignee-fk.sql' -Raw -Encoding UTF8 | Set-Clipboard\")",
+      "Bash(powershell -c \"Get-Content 'supabase/fix-encoding-all.sql' -Raw -Encoding UTF8 | Set-Clipboard\")"
     ]
   }
 }

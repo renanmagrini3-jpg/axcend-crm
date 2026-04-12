@@ -148,6 +148,7 @@ function DealDetailPanel({
   const [loadingDeal, setLoadingDeal] = useState(false);
 
   const [tasksCount, setTasksCount] = useState(0);
+  const [linkedTasks, setLinkedTasks] = useState<Array<{ id: string; title: string; status: string; due_at: string }>>([]);
   const [notes, setNotes] = useState<DealNote[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
 
@@ -230,10 +231,15 @@ function DealDetailPanel({
 
   const loadTasksCount = useCallback(async (dealId: string) => {
     try {
-      const res = await fetch(`/api/tasks?deal_id=${dealId}&limit=1`);
+      const res = await fetch(`/api/tasks?deal_id=${dealId}&limit=10`);
       if (!res.ok) return;
       const json = await res.json();
       setTasksCount(json.pagination?.total ?? 0);
+      setLinkedTasks(
+        (json.data ?? []).map((t: { id: string; title: string; status: string; due_at: string }) => ({
+          id: t.id, title: t.title, status: t.status, due_at: t.due_at,
+        })),
+      );
     } catch {
       /* ignore */
     }
@@ -256,6 +262,7 @@ function DealDetailPanel({
       setFullDeal(null);
       setNotes([]);
       setTasksCount(0);
+      setLinkedTasks([]);
       return;
     }
     loadFullDeal(deal.id);
@@ -565,12 +572,39 @@ function DealDetailPanel({
                 </div>
               </div>
 
-              {/* Tasks counter */}
+              {/* Tasks counter + list */}
               <div className="mb-6 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3">
                 <p className="text-xs text-[var(--text-muted)]">Tarefas vinculadas</p>
                 <p className="text-2xl font-bold text-[var(--text-primary)]">
                   {tasksCount}
                 </p>
+                {linkedTasks.length > 0 && (
+                  <div className="mt-3 space-y-1.5 border-t border-[var(--border-default)] pt-3">
+                    {linkedTasks.map((t) => (
+                      <div key={t.id} className="flex items-center justify-between gap-2 text-xs">
+                        <span className={cn(
+                          "truncate",
+                          t.status === "COMPLETED" ? "text-[var(--text-muted)] line-through" : "text-[var(--text-primary)]",
+                        )}>
+                          {t.title}
+                        </span>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className={cn(
+                            "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                            t.status === "COMPLETED" ? "bg-emerald-500/10 text-emerald-500"
+                              : t.status === "OVERDUE" ? "bg-red-500/10 text-red-500"
+                              : "bg-amber-500/10 text-amber-500",
+                          )}>
+                            {t.status === "COMPLETED" ? "Concluída" : t.status === "OVERDUE" ? "Atrasada" : "Pendente"}
+                          </span>
+                          <span className="text-[var(--text-muted)]">
+                            {new Date(t.due_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Actions */}
