@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest) {
 
   const { data, error } = await auth.supabase
     .from("organizations")
-    .select("id, name, slug, mode, logo, created_at, updated_at")
+    .select("id, name, slug, mode, logo, plan, created_at, updated_at")
     .eq("id", auth.organizationId)
     .single();
 
@@ -58,7 +58,7 @@ export async function PUT(req: NextRequest) {
     .from("organizations")
     .update(updates)
     .eq("id", auth.organizationId)
-    .select("id, name, slug, mode, logo, created_at, updated_at")
+    .select("id, name, slug, mode, logo, plan, created_at, updated_at")
     .single();
 
   if (error) return jsonError(error.message, 500);

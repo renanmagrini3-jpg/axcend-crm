@@ -30,7 +30,11 @@
       "Bash(ls -d \"C:/Users/Renan/axcend-crm/src/components/\"*)",
       "Bash(xargs wc:*)",
       "Bash(gh:*)",
-      "Bash(find C:\\\\Users\\\\Renan\\\\axcend-crm\\\\src\\\\app\\\\api\\\\deals:*)"
+      "Bash(find C:\\\\Users\\\\Renan\\\\axcend-crm\\\\src\\\\app\\\\api\\\\deals:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir -p \"C:/Users/Renan/axcend-crm/src/app/api/custom-fields/[id]\")",
+      "Bash(mkdir -p \"C:/Users/Renan/axcend-crm/src/app/api/lead-distribution/[id]\")",
+      "Bash(powershell -c \"Get-Content 'supabase/migration-007-settings-remaining.sql' -Raw -Encoding UTF8 | Set-Clipboard\")"
     ]
   }
 }
