@@ -38,11 +38,17 @@ export async function GET() {
 
   for (const log of logs || []) {
     const automationName = (log.automations as unknown as { name: string } | null)?.name ?? "Automação";
+    // Extract first meaningful step result from log message
+    const message = log.message ?? "";
+    const firstStep = message.split("\n").find((l: string) => l.includes(": ")) ?? "";
+    const stepSummary = firstStep.replace(/^\[Passo \d+\] \w+: /, "").trim();
+    const description = stepSummary || (log.status === "success" ? "Executada com sucesso" : "Execução registrada");
+
     notifications.push({
       id: `log-${log.id}`,
       type: "automation",
-      title: automationName,
-      description: log.status === "success" ? "Executada com sucesso" : (log.message ?? "Execução registrada"),
+      title: `[Automação] ${automationName}`,
+      description,
       timestamp: log.executed_at,
     });
   }

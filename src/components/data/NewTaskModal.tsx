@@ -11,6 +11,7 @@ interface NewTaskFormData {
   type: TaskType;
   priority: Priority;
   dueDate: string;
+  dueTime: string;
   contactId: string;
   dealId: string;
   notes: string;
@@ -57,6 +58,7 @@ const initialForm: NewTaskFormData = {
   type: "CALL",
   priority: "MEDIUM",
   dueDate: "",
+  dueTime: "09:00",
   contactId: "",
   dealId: "",
   notes: "",
@@ -137,6 +139,7 @@ function NewTaskModal({
 
     setSaving(true);
     try {
+      const dueAt = new Date(`${form.dueDate}T${form.dueTime || "09:00"}`);
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -144,7 +147,7 @@ function NewTaskModal({
           title: form.title,
           type: form.type,
           priority: form.priority,
-          due_at: new Date(form.dueDate).toISOString(),
+          due_at: dueAt.toISOString(),
           contact_id: form.contactId || null,
           deal_id: form.dealId || null,
           notes: form.notes || null,
@@ -220,16 +223,27 @@ function NewTaskModal({
           </div>
         </div>
 
-        {/* Data/Hora */}
-        <div>
-          <label className={labelClass}>Data e Hora *</label>
-          <input
-            type="datetime-local"
-            required
-            value={form.dueDate}
-            onChange={(e) => update("dueDate", e.target.value)}
-            className={selectClass}
-          />
+        {/* Data + Hora */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass}>Data *</label>
+            <input
+              type="date"
+              required
+              value={form.dueDate}
+              onChange={(e) => update("dueDate", e.target.value)}
+              className={selectClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Hora</label>
+            <input
+              type="time"
+              value={form.dueTime}
+              onChange={(e) => update("dueTime", e.target.value)}
+              className={selectClass}
+            />
+          </div>
         </div>
 
         {/* Contato */}

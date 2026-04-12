@@ -6,6 +6,11 @@ import {
   ChevronDown,
   Filter,
   Loader2,
+  Settings2,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout";
 import { Button, Modal, Input } from "@/components/ui";
@@ -95,6 +100,14 @@ export default function PipelinePage() {
   // Filters
   const [filterPriority, setFilterPriority] = useState<Priority | "ALL">("ALL");
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Stage editor modal
+  const [stageEditorOpen, setStageEditorOpen] = useState(false);
+  const [editorStages, setEditorStages] = useState<StageData[]>([]);
+  const [newStageName, setNewStageName] = useState("");
+  const [stageEditorSaving, setStageEditorSaving] = useState(false);
+  const [renamingStageId, setRenamingStageId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   // New pipeline modal
   const [newPipelineOpen, setNewPipelineOpen] = useState(false);
@@ -298,6 +311,73 @@ export default function PipelinePage() {
     stages,
   ]);
 
+  // --- Stage editor ---
+  const openStageEditor = useCallback(() => {
+    if (!selectedPipeline) return;
+    setEditorStages([...selectedPipeline.pipeline_stages].sort((a, b) => a.order - b.order));
+    setNewStageName("");
+    setRenamingStageId(null);
+    setStageEditorOpen(true);
+  }, [selectedPipeline]);
+
+  const editorAddStage = useCallback(async () => {
+    if (!newStageName.trim() || !selectedPipelineId) return;
+    setStageEditorSaving(true);
+    const res = await fetch(`/api/pipelines/${selectedPipelineId}/stages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newStageName.trim() }),
+    });
+    if (res.ok) {
+      const refreshed = await fetchPipelines();
+      setPipelines(refreshed);
+      const updated = refreshed.find((p) => p.id === selectedPipelineId);
+      if (updated) setEditorStages([...updated.pipeline_stages].sort((a, b) => a.order - b.order));
+      setNewStageName("");
+    }
+    setStageEditorSaving(false);
+  }, [newStageName, selectedPipelineId, fetchPipelines]);
+
+  const editorDeleteStage = useCallback(async (stageId: string, name: string) => {
+    if (!window.confirm(`Excluir a etapa "${name}"?`)) return;
+    await fetch(`/api/pipelines/${selectedPipelineId}/stages/${stageId}`, { method: "DELETE" });
+    const refreshed = await fetchPipelines();
+    setPipelines(refreshed);
+    const updated = refreshed.find((p) => p.id === selectedPipelineId);
+    if (updated) setEditorStages([...updated.pipeline_stages].sort((a, b) => a.order - b.order));
+  }, [selectedPipelineId, fetchPipelines]);
+
+  const editorRenameStage = useCallback(async (stageId: string) => {
+    if (!renameValue.trim()) return;
+    await fetch(`/api/pipelines/${selectedPipelineId}/stages/${stageId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: renameValue.trim() }),
+    });
+    const refreshed = await fetchPipelines();
+    setPipelines(refreshed);
+    const updated = refreshed.find((p) => p.id === selectedPipelineId);
+    if (updated) setEditorStages([...updated.pipeline_stages].sort((a, b) => a.order - b.order));
+    setRenamingStageId(null);
+  }, [renameValue, selectedPipelineId, fetchPipelines]);
+
+  const editorReorder = useCallback(async (stageId: string, direction: "up" | "down") => {
+    const sorted = [...editorStages];
+    const idx = sorted.findIndex((s) => s.id === stageId);
+    const swapWith = direction === "up" ? idx - 1 : idx + 1;
+    if (swapWith < 0 || swapWith >= sorted.length) return;
+    [sorted[idx], sorted[swapWith]] = [sorted[swapWith], sorted[idx]];
+    setEditorStages(sorted);
+    const payload = sorted.map((s, i) => ({ id: s.id, order: i + 1 }));
+    await fetch(`/api/pipelines/${selectedPipelineId}/stages/reorder`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stages: payload }),
+    });
+    const refreshed = await fetchPipelines();
+    setPipelines(refreshed);
+  }, [editorStages, selectedPipelineId, fetchPipelines]);
+
   // --- Create new pipeline ---
   const handleCreatePipeline = useCallback(async () => {
     if (!newPipelineName.trim()) return;
@@ -392,6 +472,16 @@ export default function PipelinePage() {
             </>
           )}
         </div>
+
+        {selectedPipeline && (
+          <button
+            onClick={openStageEditor}
+            className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)] transition-colors"
+            title="Editar etapas"
+          >
+            <Settings2 size={16} />
+          </button>
+        )}
 
         <div className="flex-1" />
 
@@ -571,6 +661,73 @@ export default function PipelinePage() {
           </div>
         </div>
       </Modal>
+      {/* Stage Editor Modal */}
+      <Modal
+        open={stageEditorOpen}
+        onClose={() => setStageEditorOpen(false)}
+        title={`Etapas — ${selectedPipeline?.name ?? ""}`}
+        className="max-w-md"
+      >
+        <div className="flex flex-col gap-4">
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {editorStages.map((stage, idx) => (
+              <div key={stage.id} className="flex items-center gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2">
+                <div className="flex shrink-0 flex-col">
+                  <button disabled={idx === 0} onClick={() => editorReorder(stage.id, "up")} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30"><ArrowUp size={12} /></button>
+                  <button disabled={idx === editorStages.length - 1} onClick={() => editorReorder(stage.id, "down")} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30"><ArrowDown size={12} /></button>
+                </div>
+                {renamingStageId === stage.id ? (
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") editorRenameStage(stage.id); if (e.key === "Escape") setRenamingStageId(null); }}
+                    onBlur={() => editorRenameStage(stage.id)}
+                    className="flex-1 rounded border border-[var(--border-focus)] bg-[var(--bg-surface)] px-2 py-1 text-sm text-[var(--text-primary)] outline-none"
+                  />
+                ) : (
+                  <span className="flex-1 text-sm text-[var(--text-primary)]">{stage.name}</span>
+                )}
+                <span className="text-xs text-[var(--text-muted)]">{idx + 1}ª</span>
+                <button onClick={() => { setRenamingStageId(stage.id); setRenameValue(stage.name); }} className="rounded p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Pencil size={12} /></button>
+                <button onClick={() => editorDeleteStage(stage.id, stage.name)} className="rounded p-1 text-[var(--text-muted)] hover:text-red-400"><Trash2 size={12} /></button>
+              </div>
+            ))}
+            {editorStages.length === 0 && (
+              <p className="py-4 text-center text-xs text-[var(--text-muted)]">Nenhuma etapa.</p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={newStageName}
+              onChange={(e) => setNewStageName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") editorAddStage(); }}
+              placeholder="Nova etapa..."
+              className="flex-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none"
+            />
+            <button
+              onClick={editorAddStage}
+              disabled={!newStageName.trim() || stageEditorSaving}
+              className="rounded-lg bg-orange-500 px-3 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={() => {
+                setStageEditorOpen(false);
+                // Reload deals to reflect any stage changes
+                if (selectedPipelineId) fetchDeals(selectedPipelineId).then(setDeals);
+              }}
+              className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 transition-colors"
+            >
+              Concluído
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* New Pipeline Modal */}
       <Modal
         open={newPipelineOpen}

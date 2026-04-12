@@ -59,6 +59,18 @@ function formatPhone(raw: string): string {
   return raw;
 }
 
+function maskPhone(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function unmaskPhone(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
 const ORIGINS: OriginLabel[] = [
   "Facebook Ads",
   "Google Ads",
@@ -269,7 +281,7 @@ export default function ContactsPage() {
     setEditId(contact.id);
     setFormName(contact.name);
     setFormEmail(contact.email || "");
-    setFormPhone(contact.phone || "");
+    setFormPhone(unmaskPhone(contact.phone || ""));
     setFormPosition(contact.position || "");
     setFormOrigin(contact.origin || "");
     setFormCompanyId(contact.company_id || "");
@@ -467,8 +479,9 @@ export default function ContactsPage() {
         />
         <Input
           label="Telefone"
-          value={formPhone}
-          onChange={(e) => setFormPhone(e.target.value)}
+          value={maskPhone(formPhone)}
+          onChange={(e) => setFormPhone(unmaskPhone(e.target.value))}
+          placeholder="(11) 99999-9999"
         />
         <Input
           label="Cargo"

@@ -52,6 +52,19 @@ function formatCnpj(raw: string): string {
   return raw;
 }
 
+function maskCnpj(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 14);
+  if (d.length <= 2) return d;
+  if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`;
+  if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
+  if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+}
+
+function unmaskCnpj(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
 const SEGMENTS = [
   "Tecnologia",
   "SaaS",
@@ -276,7 +289,7 @@ export default function CompaniesPage() {
   function openEdit(company: CompanyRow) {
     setEditId(company.id);
     setFormName(company.name);
-    setFormCnpj(company.cnpj || "");
+    setFormCnpj(unmaskCnpj(company.cnpj || ""));
     setFormSegment(company.segment || "");
     setFormSize(company.size || "");
     setFormWebsite(company.website || "");
@@ -390,8 +403,9 @@ export default function CompaniesPage() {
         />
         <Input
           label="CNPJ"
-          value={formCnpj}
-          onChange={(e) => setFormCnpj(e.target.value)}
+          value={maskCnpj(formCnpj)}
+          onChange={(e) => setFormCnpj(unmaskCnpj(e.target.value))}
+          placeholder="XX.XXX.XXX/XXXX-XX"
         />
         <div>
           <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">

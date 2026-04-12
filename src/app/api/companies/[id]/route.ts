@@ -49,12 +49,24 @@ export async function PUT(req: NextRequest, { params }: Params) {
     website?: string;
   };
 
+  // Validate CNPJ
+  if (cnpj !== undefined && cnpj) {
+    const cleanCnpj = cnpj.toString().replace(/\D/g, "");
+    if (cleanCnpj.length !== 14) {
+      return jsonError("CNPJ deve ter 14 dígitos", 400);
+    }
+  }
+
   const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name.toString().trim();
-  if (cnpj !== undefined) updates.cnpj = cnpj?.toString().trim() || null;
+  if (cnpj !== undefined) updates.cnpj = cnpj?.toString().replace(/\D/g, "") || null;
   if (segment !== undefined) updates.segment = segment?.toString().trim() || null;
   if (size !== undefined) updates.size = size?.toString().trim() || null;
-  if (website !== undefined) updates.website = website?.toString().trim() || null;
+  if (website !== undefined) {
+    let w = website?.toString().trim() || null;
+    if (w && !/^https?:\/\//i.test(w)) w = `https://${w}`;
+    updates.website = w;
+  }
 
   if (Object.keys(updates).length === 0) {
     return jsonError("Nenhum campo para atualizar", 400);
