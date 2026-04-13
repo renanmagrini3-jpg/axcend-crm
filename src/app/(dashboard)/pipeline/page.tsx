@@ -16,6 +16,7 @@ import { PageContainer } from "@/components/layout";
 import { Button, Modal, Input } from "@/components/ui";
 import { PipelineBoard, type StageData, type DealCardData } from "@/components/data";
 import type { DealFromApi } from "@/components/data/DealDetailPanel";
+import { useOrganization } from "@/lib/organization";
 import { cn } from "@/lib/cn";
 import type { Priority } from "@/types";
 
@@ -108,6 +109,7 @@ export default function PipelinePage() {
   const [newDealAssigneeId, setNewDealAssigneeId] = useState("");
   const [newDealSubmitting, setNewDealSubmitting] = useState(false);
 
+  const { isB2C } = useOrganization();
   const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId);
 
   // --- Data Fetching ---
@@ -566,24 +568,26 @@ export default function PipelinePage() {
             </select>
           </div>
 
-          {/* Company select */}
-          <div>
-            <label className="mb-1 block text-xs text-[var(--text-muted)]">
-              Empresa
-            </label>
-            <select
-              value={newDealCompanyId}
-              onChange={(e) => setNewDealCompanyId(e.target.value)}
-              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none"
-            >
-              <option value="">Nenhuma</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Company select — hidden in B2C */}
+          {!isB2C && (
+            <div>
+              <label className="mb-1 block text-xs text-[var(--text-muted)]">
+                Empresa
+              </label>
+              <select
+                value={newDealCompanyId}
+                onChange={(e) => setNewDealCompanyId(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none"
+              >
+                <option value="">Nenhuma</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Assignee select */}
           <div>

@@ -13,6 +13,7 @@ import {
 import { PageContainer } from "@/components/layout";
 import { Button, Badge, Modal, Input, useToast } from "@/components/ui";
 import { DataTable, type Column } from "@/components/data";
+import { useOrganization } from "@/lib/organization";
 import { cn } from "@/lib/cn";
 
 // --- Types ---
@@ -83,6 +84,7 @@ const ORIGINS: OriginLabel[] = [
 
 export default function ContactsPage() {
   const { toast } = useToast();
+  const { isB2C } = useOrganization();
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -365,7 +367,7 @@ export default function ContactsPage() {
   }
 
   // --- Columns ---
-  const columns: Column<ContactRow>[] = [
+  const allColumns: Column<ContactRow>[] = [
     { key: "name" as keyof ContactRow, label: "Nome" },
     {
       key: "email" as keyof ContactRow,
@@ -462,6 +464,10 @@ export default function ContactsPage() {
     },
   ];
 
+  const columns = isB2C
+    ? allColumns.filter((c) => c.key !== "companies")
+    : allColumns;
+
   // --- Contact form fields (shared between create/edit) ---
   function renderContactForm(onSubmit: (e: React.FormEvent) => void) {
     return (
@@ -488,23 +494,25 @@ export default function ContactsPage() {
           value={formPosition}
           onChange={(e) => setFormPosition(e.target.value)}
         />
-        <div>
-          <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">
-            Empresa
-          </label>
-          <select
-            value={formCompanyId}
-            onChange={(e) => setFormCompanyId(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none transition-colors"
-          >
-            <option value="">Nenhuma</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {!isB2C && (
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">
+              Empresa
+            </label>
+            <select
+              value={formCompanyId}
+              onChange={(e) => setFormCompanyId(e.target.value)}
+              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none transition-colors"
+            >
+              <option value="">Nenhuma</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">
             Origem

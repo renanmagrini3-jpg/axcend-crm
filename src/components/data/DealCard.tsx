@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/cn";
 import { cardHover } from "@/lib/motion";
 import { Badge, Avatar } from "@/components/ui";
+import { useOrganization } from "@/lib/organization";
 import type { Priority } from "@/types";
 
 export interface DealCardData {
@@ -57,6 +58,8 @@ function timeAgo(date: Date): string {
 }
 
 function DealCard({ deal, onClick }: DealCardProps) {
+  const { isB2C } = useOrganization();
+
   return (
     <motion.div
       whileHover={cardHover}
@@ -67,7 +70,7 @@ function DealCard({ deal, onClick }: DealCardProps) {
     >
       <div className="mb-2 flex items-start justify-between gap-2">
         <p className="text-sm font-medium text-[var(--text-primary)] line-clamp-1">
-          {deal.title}
+          {isB2C ? deal.contactName : deal.title}
         </p>
         <Badge variant={priorityVariant[deal.priority]} size="sm">
           {priorityLabel[deal.priority]}
@@ -75,8 +78,12 @@ function DealCard({ deal, onClick }: DealCardProps) {
       </div>
 
       <p className="text-xs text-[var(--text-secondary)] line-clamp-1">
-        {deal.contactName}
-        {deal.companyName && ` · ${deal.companyName}`}
+        {isB2C ? deal.title : (
+          <>
+            {deal.contactName}
+            {deal.companyName && ` · ${deal.companyName}`}
+          </>
+        )}
       </p>
 
       <p className="mt-2 text-lg font-bold text-[var(--text-primary)]">

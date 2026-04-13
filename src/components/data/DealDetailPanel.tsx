@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/cn";
 import { overlay } from "@/lib/motion";
 import { Badge, Avatar, Button, Modal, useToast } from "@/components/ui";
+import { useOrganization } from "@/lib/organization";
 import { NewTaskModal } from "./NewTaskModal";
 import type { DealCardData } from "./DealCard";
 import type { StageData } from "./PipelineBoard";
@@ -143,6 +144,7 @@ function DealDetailPanel({
   onDealDeleted,
 }: DealDetailPanelProps) {
   const { toast } = useToast();
+  const { isB2C } = useOrganization();
 
   const [fullDeal, setFullDeal] = useState<DealFromApi | null>(null);
   const [loadingDeal, setLoadingDeal] = useState(false);
@@ -557,7 +559,7 @@ function DealDetailPanel({
               {/* Info grid */}
               <div className="mb-6 grid grid-cols-2 gap-4">
                 <InfoItem label="Contato" value={displayContactName} />
-                <InfoItem label="Empresa" value={displayCompanyName} />
+                {!isB2C && <InfoItem label="Empresa" value={displayCompanyName} />}
                 <InfoItem label="Etapa" value={displayStageName} />
                 <div>
                   <p className="text-xs text-[var(--text-muted)] mb-1">
@@ -791,23 +793,25 @@ function DealDetailPanel({
                 </select>
               </div>
 
-              <div>
-                <label className={labelClass}>Empresa</label>
-                <select
-                  value={editForm.company_id}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, company_id: e.target.value }))
-                  }
-                  className={inputClass}
-                >
-                  <option value="">Nenhuma</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {!isB2C && (
+                <div>
+                  <label className={labelClass}>Empresa</label>
+                  <select
+                    value={editForm.company_id}
+                    onChange={(e) =>
+                      setEditForm((p) => ({ ...p, company_id: e.target.value }))
+                    }
+                    className={inputClass}
+                  >
+                    <option value="">Nenhuma</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className={labelClass}>Responsável</label>

@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/cn";
 import { sidebar as sidebarVariants, overlay } from "@/lib/motion";
 import { Avatar } from "@/components/ui";
+import { useOrganization } from "@/lib/organization";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -44,6 +45,11 @@ interface SidebarProps {
 function Sidebar({ mobileOpen, onMobileClose, userName, userEmail }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+  const { isB2C } = useOrganization();
+
+  const filteredNavItems = isB2C
+    ? navItems.filter((item) => item.href !== "/companies")
+    : navItems;
 
   const toggleCollapse = useCallback(() => setCollapsed((p) => !p), []);
 
@@ -83,7 +89,7 @@ function Sidebar({ mobileOpen, onMobileClose, userName, userEmail }: SidebarProp
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2">
         <ul className="flex flex-col gap-0.5">
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {filteredNavItems.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href;
             return (
               <li key={href}>

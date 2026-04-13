@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, type ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { OrganizationProvider } from "@/lib/organization";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -33,24 +34,26 @@ function DashboardLayout({ children }: DashboardLayoutProps) {
   }, []);
 
   return (
-    <div className="min-h-dvh bg-[var(--bg-base)]">
-      <Sidebar
-        mobileOpen={mobileOpen}
-        onMobileClose={closeMobile}
-        userName={userName}
-        userEmail={userEmail}
-      />
-
-      {/* Main area — offset by sidebar width on desktop */}
-      <div className="lg:pl-60">
-        <Header
-          onMenuClick={openMobile}
+    <OrganizationProvider>
+      <div className="min-h-dvh bg-[var(--bg-base)]">
+        <Sidebar
+          mobileOpen={mobileOpen}
+          onMobileClose={closeMobile}
           userName={userName}
           userEmail={userEmail}
         />
-        <main className="min-h-[calc(100dvh-4rem)]">{children}</main>
+
+        {/* Main area — offset by sidebar width on desktop */}
+        <div className="lg:pl-60">
+          <Header
+            onMenuClick={openMobile}
+            userName={userName}
+            userEmail={userEmail}
+          />
+          <main className="min-h-[calc(100dvh-4rem)]">{children}</main>
+        </div>
       </div>
-    </div>
+    </OrganizationProvider>
   );
 }
 
