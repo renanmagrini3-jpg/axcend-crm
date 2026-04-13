@@ -27,6 +27,8 @@ export interface TaskCardData {
   status: TaskStatus;
   dueDate: Date;
   contactName: string;
+  dealId?: string | null;
+  contactId?: string | null;
   assignedTo: {
     name: string;
     avatar?: string;
@@ -36,6 +38,7 @@ export interface TaskCardData {
 interface TaskCardProps {
   task: TaskCardData;
   onToggleComplete: (id: string) => void;
+  onClick?: (task: TaskCardData) => void;
 }
 
 // --- Helpers ---
@@ -96,7 +99,7 @@ function formatDueDate(date: Date): string {
 
 // --- Component ---
 
-function TaskCard({ task, onToggleComplete }: TaskCardProps) {
+function TaskCard({ task, onToggleComplete, onClick }: TaskCardProps) {
   const Icon = typeIcons[task.type];
   const priority = priorityConfig[task.priority];
   const status = statusConfig[task.status];
@@ -106,8 +109,10 @@ function TaskCard({ task, onToggleComplete }: TaskCardProps) {
   return (
     <motion.div
       whileHover={cardHover}
+      onClick={() => onClick?.(task)}
       className={cn(
         "flex items-start gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 transition-colors",
+        onClick && "cursor-pointer",
         isOverdue && "border-l-2 border-l-red-500",
         isCompleted && "opacity-60",
       )}

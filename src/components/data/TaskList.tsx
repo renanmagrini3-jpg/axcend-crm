@@ -12,6 +12,7 @@ import { TaskCard, type TaskCardData } from "./TaskCard";
 interface TaskListProps {
   tasks: TaskCardData[];
   onToggleComplete: (id: string) => void;
+  onTaskClick?: (task: TaskCardData) => void;
 }
 
 interface TaskSection {
@@ -50,7 +51,7 @@ const sectionDefs: { key: string; label: string; icon: typeof AlertTriangle; col
 
 // --- Component ---
 
-function TaskList({ tasks, onToggleComplete }: TaskListProps) {
+function TaskList({ tasks, onToggleComplete, onTaskClick }: TaskListProps) {
   const sections = useMemo<TaskSection[]>(() => {
     const grouped: Record<string, TaskCardData[]> = {
       overdue: [],
@@ -106,7 +107,7 @@ function TaskList({ tasks, onToggleComplete }: TaskListProps) {
             >
               {section.tasks.map((task) => (
                 <motion.div key={task.id} variants={staggerChild}>
-                  <TaskCard task={task} onToggleComplete={onToggleComplete} />
+                  <TaskCard task={task} onToggleComplete={onToggleComplete} onClick={onTaskClick} />
                 </motion.div>
               ))}
             </motion.div>

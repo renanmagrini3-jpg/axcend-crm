@@ -11,6 +11,8 @@ import {
   ArrowDown,
   Trash2,
   Pencil,
+  Search,
+  X as XIcon,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout";
 import { Button, Modal, Input } from "@/components/ui";
@@ -56,18 +58,21 @@ const priorities: { value: Priority | "ALL"; label: string }[] = [
   { value: "LOW", label: "Baixa" },
 ];
 
-function dealFromAPI(deal: DealFromAPI): DealCardData {
+function dealFromAPI(deal: DealFromAPI, extras?: { nextTask?: string | null; notesCount?: number }): DealCardData {
   return {
     id: deal.id,
     title: deal.title,
     value: Number(deal.value),
     priority: deal.priority as Priority,
     contactName: deal.contacts?.name ?? "—",
+    contactPhone: deal.contacts?.phone ?? undefined,
     companyName: deal.companies?.name,
     assigneeName: deal.organization_members?.name ?? "—",
     lossReason: deal.loss_reason,
     stageName: deal.pipeline_stages?.name,
     createdAt: new Date(deal.created_at),
+    nextTask: extras?.nextTask,
+    notesCount: extras?.notesCount,
   };
 }
 
@@ -81,10 +86,30 @@ export default function PipelinePage() {
   const [members, setMembers] = useState<MemberOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [pipelineDropdownOpen, setPipelineDropdownOpen] = useState(false);
+  // Extra card data: next task per deal
+  const [dealExtras, setDealExtras] = useState<Record<string, { nextTask?: string | null }>>({});
 
   // Filters
   const [filterPriority, setFilterPriority] = useState<Priority | "ALL">("ALL");
+  const [filterSearch, setFilterSearch] = useState("");
+  const [filterAssignee, setFilterAssignee] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterValueMin, setFilterValueMin] = useState("");
+  const [filterValueMax, setFilterValueMax] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const hasActiveFilters = filterPriority !== "ALL" || filterSearch || filterAssignee || filterDateFrom || filterDateTo || filterValueMin || filterValueMax;
+
+  function clearFilters() {
+    setFilterPriority("ALL");
+    setFilterSearch("");
+    setFilterAssignee("");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setFilterValueMin("");
+    setFilterValueMax("");
+  }
 
   // Stage editor modal
   const [stageEditorOpen, setStageEditorOpen] = useState(false);
@@ -127,6 +152,28 @@ export default function PipelinePage() {
     if (!res.ok) return [];
     const data = await res.json();
     return (data.data ?? []) as DealFromAPI[];
+  }, []);
+
+  const loadDealExtras = useCallback(async (dealList: DealFromAPI[]) => {
+    if (dealList.length === 0) return;
+    // Load next pending task for each deal in a batch
+    const extras: Record<string, { nextTask?: string | null }> = {};
+    await Promise.all(
+      dealList.map(async (deal) => {
+        try {
+          const res = await fetch(`/api/tasks?deal_id=${deal.id}&status=PENDING&limit=1&sortBy=due_at&order=asc`);
+          if (!res.ok) return;
+          const json = await res.json();
+          const firstTask = json.data?.[0];
+          extras[deal.id] = {
+            nextTask: firstTask
+              ? `${firstTask.title} · ${new Date(firstTask.due_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}`
+              : null,
+          };
+        } catch { /* ignore */ }
+      }),
+    );
+    setDealExtras(extras);
   }, []);
 
   const createDefaultPipeline = useCallback(async () => {
@@ -181,12 +228,13 @@ export default function PipelinePage() {
         setSelectedPipelineId(firstId);
         const dealList = await fetchDeals(firstId);
         setDeals(dealList);
+        loadDealExtras(dealList);
       }
 
       setLoading(false);
     }
     init();
-  }, [fetchPipelines, fetchDeals, createDefaultPipeline]);
+  }, [fetchPipelines, fetchDeals, createDefaultPipeline, loadDealExtras]);
 
   // When pipeline changes, reload deals
   const handlePipelineChange = useCallback(
@@ -196,9 +244,10 @@ export default function PipelinePage() {
       setLoading(true);
       const dealList = await fetchDeals(pipelineId);
       setDeals(dealList);
+      loadDealExtras(dealList);
       setLoading(false);
     },
-    [fetchDeals],
+    [fetchDeals, loadDealExtras],
   );
 
   // --- Computed: deals grouped by stage ---
@@ -210,16 +259,32 @@ export default function PipelinePage() {
     for (const stage of stages) {
       result[stage.id] = [];
     }
+    const searchLower = filterSearch.toLowerCase();
+    const valMin = filterValueMin ? parseFloat(filterValueMin) : null;
+    const valMax = filterValueMax ? parseFloat(filterValueMax) : null;
+
     for (const deal of deals) {
-      const card = dealFromAPI(deal);
-      // Apply filters
+      // Apply filters on raw deal data
       if (filterPriority !== "ALL" && deal.priority !== filterPriority) continue;
+      if (filterAssignee && deal.assigned_to_id !== filterAssignee) continue;
+      if (valMin !== null && Number(deal.value) < valMin) continue;
+      if (valMax !== null && Number(deal.value) > valMax) continue;
+      if (filterDateFrom && deal.created_at < filterDateFrom) continue;
+      if (filterDateTo && deal.created_at > filterDateTo + "T23:59:59") continue;
+      if (searchLower) {
+        const matchTitle = deal.title.toLowerCase().includes(searchLower);
+        const matchContact = (deal.contacts?.name ?? "").toLowerCase().includes(searchLower);
+        const matchPhone = (deal.contacts?.phone ?? "").includes(searchLower);
+        if (!matchTitle && !matchContact && !matchPhone) continue;
+      }
+
+      const card = dealFromAPI(deal, dealExtras[deal.id]);
       if (result[deal.stage_id]) {
         result[deal.stage_id].push(card);
       }
     }
     return result;
-  }, [deals, stages, filterPriority]);
+  }, [deals, stages, dealExtras, filterPriority, filterSearch, filterAssignee, filterDateFrom, filterDateTo, filterValueMin, filterValueMax]);
 
   // --- Drag & Drop: move deal to new stage ---
 
@@ -500,29 +565,89 @@ export default function PipelinePage() {
 
       {/* Filters bar */}
       {filtersOpen && (
-        <div className="mb-4 flex flex-wrap gap-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
-          {/* Priority filter */}
-          <div>
-            <label className="mb-1 block text-xs text-[var(--text-muted)]">
-              Prioridade
-            </label>
-            <div className="flex gap-1">
-              {priorities.map((p) => (
-                <button
-                  key={p.value}
-                  onClick={() => setFilterPriority(p.value)}
-                  className={cn(
-                    "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                    filterPriority === p.value
-                      ? "bg-orange-500 text-white"
-                      : "bg-[var(--bg-base)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
+        <div className="mb-4 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
+          <div className="flex flex-wrap gap-3">
+            {/* Search */}
+            <div className="min-w-[180px] flex-1">
+              <label className="mb-1 block text-xs text-[var(--text-muted)]">Busca</label>
+              <div className="relative">
+                <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                <input
+                  type="text"
+                  placeholder="Deal, contato ou telefone..."
+                  value={filterSearch}
+                  onChange={(e) => setFilterSearch(e.target.value)}
+                  className="w-full rounded-md border border-[var(--border-default)] bg-[var(--bg-base)] pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--border-focus)] focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Priority */}
+            <div>
+              <label className="mb-1 block text-xs text-[var(--text-muted)]">Prioridade</label>
+              <div className="flex gap-1">
+                {priorities.map((p) => (
+                  <button
+                    key={p.value}
+                    onClick={() => setFilterPriority(p.value)}
+                    className={cn(
+                      "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                      filterPriority === p.value
+                        ? "bg-orange-500 text-white"
+                        : "bg-[var(--bg-base)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Assignee */}
+            <div>
+              <label className="mb-1 block text-xs text-[var(--text-muted)]">Responsável</label>
+              <select
+                value={filterAssignee}
+                onChange={(e) => setFilterAssignee(e.target.value)}
+                className="rounded-md border border-[var(--border-default)] bg-[var(--bg-base)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none"
+              >
+                <option value="">Todos</option>
+                {members.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
+              </select>
+            </div>
+
+            {/* Date from/to */}
+            <div>
+              <label className="mb-1 block text-xs text-[var(--text-muted)]">Criado de</label>
+              <input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} className="rounded-md border border-[var(--border-default)] bg-[var(--bg-base)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-[var(--text-muted)]">Criado até</label>
+              <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} className="rounded-md border border-[var(--border-default)] bg-[var(--bg-base)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none" />
+            </div>
+
+            {/* Value range */}
+            <div>
+              <label className="mb-1 block text-xs text-[var(--text-muted)]">Valor mínimo</label>
+              <input type="number" placeholder="R$ 0" value={filterValueMin} onChange={(e) => setFilterValueMin(e.target.value)} className="w-24 rounded-md border border-[var(--border-default)] bg-[var(--bg-base)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-[var(--text-muted)]">Valor máximo</label>
+              <input type="number" placeholder="R$ ∞" value={filterValueMax} onChange={(e) => setFilterValueMax(e.target.value)} className="w-24 rounded-md border border-[var(--border-default)] bg-[var(--bg-base)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none" />
             </div>
           </div>
+
+          {hasActiveFilters && (
+            <div className="mt-3 flex justify-end">
+              <button
+                onClick={clearFilters}
+                className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+              >
+                <XIcon size={12} />
+                Limpar filtros
+              </button>
+            </div>
+          )}
         </div>
       )}
 

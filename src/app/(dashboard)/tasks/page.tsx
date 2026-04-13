@@ -8,6 +8,8 @@ import { Button, Badge, useToast } from "@/components/ui";
 import { TaskList } from "@/components/data/TaskList";
 import { TaskCard } from "@/components/data/TaskCard";
 import { NewTaskModal } from "@/components/data/NewTaskModal";
+import { DealDetailPanel } from "@/components/data/DealDetailPanel";
+import type { DealCardData } from "@/components/data/DealCard";
 import { staggerContainer, staggerChild } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 import type { TaskType, Priority, TaskStatus } from "@/types";
@@ -69,7 +71,6 @@ interface TaskApiRow {
 function apiToCard(row: TaskApiRow): TaskCardData {
   const dueDate = new Date(row.due_at);
   let status = row.status as TaskStatus;
-  // Auto-detect overdue
   if (status === "PENDING" && isPast(dueDate)) {
     status = "OVERDUE";
   }
@@ -82,6 +83,8 @@ function apiToCard(row: TaskApiRow): TaskCardData {
     status,
     dueDate,
     contactName: row.contacts?.name || "—",
+    dealId: row.deal_id,
+    contactId: row.contact_id,
     assignedTo: { name: "" },
   };
 }
@@ -99,6 +102,11 @@ export default function TasksPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [calendarDate, setCalendarDate] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  // Custom date filter
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  // Deal panel
+  const [dealPanelDeal, setDealPanelDeal] = useState<DealCardData | null>(null);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -165,6 +173,27 @@ export default function TasksPage() {
     fetchTasks();
   }
 
+  const handleTaskClick = useCallback(async (task: TaskCardData) => {
+    if (!task.dealId) return;
+    try {
+      const res = await fetch(`/api/deals/${task.dealId}`);
+      if (!res.ok) return;
+      const deal = await res.json();
+      setDealPanelDeal({
+        id: deal.id,
+        title: deal.title,
+        value: Number(deal.value),
+        priority: deal.priority,
+        contactName: deal.contacts?.name ?? "—",
+        companyName: deal.companies?.name,
+        assigneeName: deal.organization_members?.name ?? "—",
+        lossReason: deal.loss_reason,
+        stageName: deal.pipeline_stages?.name,
+        createdAt: new Date(deal.created_at),
+      });
+    } catch { /* ignore */ }
+  }, []);
+
   const filtered = useMemo(() => {
     let result = tasks;
 
@@ -180,6 +209,16 @@ export default function TasksPage() {
     // Priority filter
     if (filterPriority) result = result.filter((t) => t.priority === filterPriority);
 
+    // Custom date range filter
+    if (filterDateFrom) {
+      const from = new Date(filterDateFrom);
+      result = result.filter((t) => t.dueDate >= from);
+    }
+    if (filterDateTo) {
+      const to = new Date(filterDateTo + "T23:59:59");
+      result = result.filter((t) => t.dueDate <= to);
+    }
+
     // Search
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -191,7 +230,7 @@ export default function TasksPage() {
     }
 
     return result;
-  }, [tasks, activeTab, filterType, filterPriority, search]);
+  }, [tasks, activeTab, filterType, filterPriority, filterDateFrom, filterDateTo, search]);
 
   // Tab counts
   const counts: Record<TabKey, number> = useMemo(() => ({
@@ -336,7 +375,7 @@ export default function TasksPage() {
               <p className="text-sm text-[var(--text-muted)]">Nenhuma tarefa para este dia.</p>
             ) : (
               selectedDayTasks.map((task) => (
-                <TaskCard key={task.id} task={task} onToggleComplete={handleToggleComplete} />
+                <TaskCard key={task.id} task={task} onToggleComplete={handleToggleComplete} onClick={handleTaskClick} />
               ))
             )}
           </div>
@@ -390,6 +429,21 @@ export default function TasksPage() {
             <option value="MEDIUM">Média</option>
             <option value="LOW">Baixa</option>
           </select>
+
+          <input
+            type="date"
+            value={filterDateFrom}
+            onChange={(e) => setFilterDateFrom(e.target.value)}
+            title="Data de"
+            className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-2.5 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none transition-colors"
+          />
+          <input
+            type="date"
+            value={filterDateTo}
+            onChange={(e) => setFilterDateTo(e.target.value)}
+            title="Data até"
+            className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-2.5 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none transition-colors"
+          />
         </div>
 
         <div className="flex-1" />
@@ -446,11 +500,17 @@ export default function TasksPage() {
       ) : activeTab === "calendar" ? (
         <TaskCalendar />
       ) : (
-        <TaskList tasks={filtered} onToggleComplete={handleToggleComplete} />
+        <TaskList tasks={filtered} onToggleComplete={handleToggleComplete} onTaskClick={handleTaskClick} />
       )}
 
       {/* New Task Modal */}
       <NewTaskModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={handleTaskCreated} />
+
+      {/* Deal Detail Panel — opens when clicking a task with deal_id */}
+      <DealDetailPanel
+        deal={dealPanelDeal}
+        onClose={() => setDealPanelDeal(null)}
+      />
     </PageContainer>
   );
 }

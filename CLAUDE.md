@@ -46,6 +46,7 @@ Always use Context7 MCP tools before planning or implementing code that involves
 - pipeline_stages — id, name, order, pipeline_id
 - deals — id, title, value, priority, contact_id, company_id, pipeline_id, stage_id, assigned_to_id, loss_reason, closed_at, organization_id
 - deal_notes — id, deal_id, content, author_name, author_id
+- deal_attachments — id, deal_id, file_name, file_path, file_size, uploaded_by, organization_id, created_at
 - tasks — id, title, type, status, priority, due_at, completed_at, assigned_to_id, contact_id, deal_id, notes, organization_id
 - automations — id, name, description, trigger_type, trigger_config, is_active, execution_count, last_executed_at, organization_id
 - automation_steps — id, automation_id, step_order, step_type, step_config
@@ -71,6 +72,7 @@ Always use Context7 MCP tools before planning or implementing code that involves
 - /api/deals/[id] — GET, PUT, DELETE (joins organization_members for assignee)
 - /api/deals/[id]/move — PATCH
 - /api/deals/[id]/notes — GET, POST
+- /api/deals/[id]/attachments — GET, POST (multipart upload), DELETE (attachment_id param)
 - /api/pipelines — GET, POST
 - /api/pipelines/[id] — PUT, DELETE
 - /api/pipelines/[id]/stages — GET, POST

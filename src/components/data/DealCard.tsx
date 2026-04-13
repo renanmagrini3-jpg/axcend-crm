@@ -13,12 +13,15 @@ export interface DealCardData {
   value: number;
   priority: Priority;
   contactName: string;
+  contactPhone?: string;
   companyName?: string;
   assigneeName: string;
   assigneeAvatar?: string;
   lossReason?: string | null;
   stageName?: string;
   createdAt: Date;
+  nextTask?: string | null;
+  notesCount?: number;
 }
 
 interface DealCardProps {
@@ -90,8 +93,20 @@ function DealCard({ deal, onClick }: DealCardProps) {
         {formatCurrency(deal.value)}
       </p>
 
+      {deal.contactPhone && (
+        <p className="mt-1 text-xs text-[var(--text-muted)] truncate">
+          {deal.contactPhone}
+        </p>
+      )}
+
+      {deal.nextTask && (
+        <p className="mt-1 truncate rounded bg-orange-500/10 px-1.5 py-0.5 text-[10px] text-orange-400">
+          {deal.nextTask}
+        </p>
+      )}
+
       {deal.stageName === "Fechado Perdido" && deal.lossReason && (
-        <p className="mt-1.5 truncate rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-400">
+        <p className="mt-1 truncate rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-400">
           {deal.lossReason}
         </p>
       )}
