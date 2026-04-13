@@ -45,6 +45,16 @@ const RULE_TYPE_LABELS: Record<RuleType, string> = {
   custom: "Customizado",
 };
 
+const RULE_TYPE_DESCRIPTIONS: Record<RuleType, string> = {
+  round_robin: "Distribui leads igualmente entre os vendedores, alternando a cada novo lead recebido.",
+  weighted: "Distribui leads proporcionalmente ao peso definido para cada vendedor.",
+  territory: "Direciona leads para vendedores responsáveis por regiões geográficas específicas.",
+  segment: "Direciona leads para vendedores específicos baseado no segmento da empresa.",
+  value_based: "Leads acima de determinado valor são direcionados para vendedores senior.",
+  hybrid: "Combina múltiplos critérios (região, segmento, valor) para distribuição inteligente.",
+  custom: "Regra personalizada com critérios definidos manualmente.",
+};
+
 const inputClass =
   "w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] transition-colors focus:border-[var(--border-focus)] focus:outline-none";
 const labelClass = "mb-1 block text-xs font-medium text-[var(--text-secondary)]";
@@ -223,12 +233,21 @@ export function LeadDistributionTab() {
             Distribuição de Leads
           </h2>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Configure regras automáticas para distribuir leads entre vendedores.
+            Configure regras para distribuir leads entre vendedores.
           </p>
         </div>
         <Button size="sm" icon={<Plus size={14} />} onClick={openCreate}>
           Nova Regra
         </Button>
+      </div>
+
+      <div className="rounded-lg border border-orange-500/30 bg-orange-500/5 p-3">
+        <p className="text-xs font-medium text-orange-500">
+          Execução automática prevista para a v3.4
+        </p>
+        <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+          Configure suas regras agora. A distribuição automática será ativada em breve com base nestas regras.
+        </p>
       </div>
 
       {rules.length === 0 ? (
@@ -262,11 +281,9 @@ export function LeadDistributionTab() {
                           {RULE_TYPE_LABELS[rule.rule_type]}
                         </Badge>
                       </div>
-                      {rule.description && (
-                        <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                          {rule.description}
-                        </p>
-                      )}
+                      <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                        {RULE_TYPE_DESCRIPTIONS[rule.rule_type]}
+                      </p>
                     </div>
                   </div>
 
@@ -336,16 +353,6 @@ export function LeadDistributionTab() {
           </div>
 
           <div>
-            <label className={labelClass}>Descrição</label>
-            <input
-              value={formDescription}
-              onChange={(e) => setFormDescription(e.target.value)}
-              placeholder="Descreva como essa regra funciona"
-              className={inputClass}
-            />
-          </div>
-
-          <div>
             <label className={labelClass}>Tipo de Regra</label>
             <div className="relative">
               <select
@@ -364,6 +371,9 @@ export function LeadDistributionTab() {
                 className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[var(--text-muted)]"
               />
             </div>
+            <p className="mt-1.5 rounded-md bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--text-muted)]">
+              {RULE_TYPE_DESCRIPTIONS[formRuleType]}
+            </p>
           </div>
 
           <div>

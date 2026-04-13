@@ -936,8 +936,22 @@ export default function ReportsPage() {
 
     if (state.message || !state.data || state.data.length === 0) {
       return (
-        <div className="py-8 text-center text-sm text-[var(--text-secondary)]">
-          {state.message || "Dados insuficientes para gerar este relatório. Adicione mais dados ao sistema."}
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-500/10">
+            <BarChart3 className="h-7 w-7 text-orange-500" />
+          </div>
+          <h4 className="text-sm font-semibold text-[var(--text-primary)]">
+            {state.message || "Dados insuficientes para este relatório"}
+          </h4>
+          <p className="mt-1 max-w-xs text-xs text-[var(--text-muted)]">
+            Crie deals e tarefas para gerar relatórios. Quanto mais dados, mais completas serão as análises.
+          </p>
+          <a
+            href="/pipeline"
+            className="mt-4 inline-flex items-center gap-1 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 transition-colors"
+          >
+            Ir para Pipeline
+          </a>
         </div>
       );
     }

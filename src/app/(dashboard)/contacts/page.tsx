@@ -9,6 +9,7 @@ import {
   Trash2,
   Pencil,
   Users,
+  FileDown,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout";
 import { Button, Badge, Modal, Input, useToast } from "@/components/ui";
@@ -103,6 +104,12 @@ export default function ContactsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dealImportRef = useRef<HTMLInputElement>(null);
+  const [showDealImportModal, setShowDealImportModal] = useState(false);
+  const [dealImportPipelineId, setDealImportPipelineId] = useState("");
+  const [dealImportStageId, setDealImportStageId] = useState("");
+  const [dealImportPipelines, setDealImportPipelines] = useState<Array<{ id: string; name: string; pipeline_stages: Array<{ id: string; name: string; order: number }> }>>([]);
+  const [dealImportFile, setDealImportFile] = useState<File | null>(null);
 
   // Form fields
   const [formName, setFormName] = useState("");
@@ -418,6 +425,97 @@ export default function ContactsPage() {
     }
   }
 
+  function handleDownloadTemplate() {
+    const headers = ["nome", "email", "telefone", "cargo", "empresa", "origem"];
+    const examples = [
+      ["Maria Silva", "maria@empresa.com", "11999887766", "Diretora Comercial", "Empresa ABC", "Google Ads"],
+      ["João Santos", "joao@startup.io", "21988776655", "CEO", "Startup XYZ", "LinkedIn"],
+    ];
+    const csv = [headers, ...examples].map((r) => r.map((v) => `"${v}"`).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "modelo-importacao-contatos.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("Modelo baixado!", "success");
+  }
+
+  async function openDealImportModal() {
+    try {
+      const res = await fetch("/api/pipelines");
+      if (res.ok) {
+        const data = await res.json();
+        setDealImportPipelines(data ?? []);
+        if (data.length > 0) {
+          setDealImportPipelineId(data[0].id);
+          const stages = data[0].pipeline_stages ?? [];
+          setDealImportStageId(stages.length > 0 ? stages[0].id : "");
+        }
+      }
+    } catch { /* ignore */ }
+    setShowDealImportModal(true);
+  }
+
+  async function handleDealImport() {
+    if (!dealImportFile || !dealImportPipelineId || !dealImportStageId) {
+      toast("Selecione pipeline, etapa e arquivo", "warning");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // First import contacts
+      const formData = new FormData();
+      formData.append("file", dealImportFile);
+      const importRes = await fetch("/api/contacts/import", {
+        method: "POST",
+        body: formData,
+      });
+      const importJson = await importRes.json();
+      if (!importRes.ok) {
+        toast(importJson.error || "Erro ao importar CSV", "error");
+        return;
+      }
+
+      const importedIds: string[] = importJson.ids ?? [];
+      let dealsCreated = 0;
+
+      // Create a deal for each imported contact
+      for (const contactId of importedIds) {
+        try {
+          const dealRes = await fetch("/api/deals", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: `Deal - Importação ${new Date().toLocaleDateString("pt-BR")}`,
+              value: 0,
+              priority: "MEDIUM",
+              contact_id: contactId,
+              pipeline_id: dealImportPipelineId,
+              stage_id: dealImportStageId,
+            }),
+          });
+          if (dealRes.ok) dealsCreated++;
+        } catch { /* continue */ }
+      }
+
+      toast(`${importJson.imported} contato(s) importado(s) e ${dealsCreated} deal(s) criado(s)!`, "success");
+      setShowDealImportModal(false);
+      setDealImportFile(null);
+      fetchContacts();
+    } catch {
+      toast("Erro de conexão", "error");
+    } finally {
+      setSaving(false);
+      if (dealImportRef.current) dealImportRef.current.value = "";
+    }
+  }
+
+  const selectedDealImportPipeline = dealImportPipelines.find((p) => p.id === dealImportPipelineId);
+  const dealImportStages = selectedDealImportPipeline?.pipeline_stages ?? [];
+
   // --- Columns ---
   const allColumns: Column<ContactRow>[] = [
     { key: "name" as keyof ContactRow, label: "Nome" },
@@ -684,6 +782,15 @@ export default function ContactsPage() {
           Exportar Todos
         </Button>
 
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<FileDown size={14} />}
+          onClick={handleDownloadTemplate}
+        >
+          Baixar Modelo
+        </Button>
+
         <input
           ref={fileInputRef}
           type="file"
@@ -699,6 +806,15 @@ export default function ContactsPage() {
           loading={saving}
         >
           Importar CSV
+        </Button>
+
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Upload size={14} />}
+          onClick={openDealImportModal}
+        >
+          Importar como Deals
         </Button>
 
         <Button
@@ -825,6 +941,72 @@ export default function ContactsPage() {
           <Button variant="danger" onClick={handleDelete} loading={saving}>
             Excluir
           </Button>
+        </div>
+      </Modal>
+
+      {/* Import as Deals Modal */}
+      <Modal
+        open={showDealImportModal}
+        onClose={() => { setShowDealImportModal(false); setDealImportFile(null); }}
+        title="Importar como Deals"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Importe contatos a partir de um CSV e crie automaticamente um deal para cada contato no pipeline e etapa selecionados.
+          </p>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">Pipeline</label>
+            <select
+              value={dealImportPipelineId}
+              onChange={(e) => {
+                setDealImportPipelineId(e.target.value);
+                const p = dealImportPipelines.find((pp) => pp.id === e.target.value);
+                const stages = p?.pipeline_stages ?? [];
+                setDealImportStageId(stages.length > 0 ? stages[0].id : "");
+              }}
+              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none transition-colors"
+            >
+              {dealImportPipelines.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">Etapa</label>
+            <select
+              value={dealImportStageId}
+              onChange={(e) => setDealImportStageId(e.target.value)}
+              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none transition-colors"
+            >
+              {dealImportStages
+                .sort((a, b) => a.order - b.order)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">Arquivo CSV</label>
+            <input
+              ref={dealImportRef}
+              type="file"
+              accept=".csv"
+              onChange={(e) => setDealImportFile(e.target.files?.[0] ?? null)}
+              className="w-full text-sm text-[var(--text-primary)] file:mr-3 file:rounded-lg file:border-0 file:bg-orange-500 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-orange-600"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => { setShowDealImportModal(false); setDealImportFile(null); }}>
+              Cancelar
+            </Button>
+            <Button onClick={handleDealImport} loading={saving} disabled={!dealImportFile}>
+              Importar e Criar Deals
+            </Button>
+          </div>
         </div>
       </Modal>
     </PageContainer>

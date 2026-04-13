@@ -217,8 +217,16 @@ function EmptyState({ tvMode }: { tvMode: boolean }) {
         "max-w-md text-center text-[var(--text-secondary)]",
         tvMode ? "text-base" : "text-sm",
       )}>
-        Adicione vendedores e feche deals para ver o ranking
+        Atribua deals aos membros da equipe para ver o ranking. Cada deal fechado conta pontos para o vendedor responsável.
       </p>
+      {!tvMode && (
+        <a
+          href="/pipeline"
+          className="mt-2 inline-flex items-center gap-1 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 transition-colors"
+        >
+          Ir para Pipeline
+        </a>
+      )}
     </div>
   );
 }
