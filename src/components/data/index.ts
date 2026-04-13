@@ -7,3 +7,5 @@ export { TaskList } from "./TaskList";
 export { NewTaskModal, type NewTaskModalProps } from "./NewTaskModal";
 export { ReportCard, type ReportCardProps } from "./ReportCard";
 export { WorkflowBuilder } from "./WorkflowBuilder";
+export { CustomFieldsForm, saveCustomFieldValues } from "./CustomFieldsForm";
+export type { CustomFieldDef, CustomFieldValueRecord } from "./CustomFieldsForm";

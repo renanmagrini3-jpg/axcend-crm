@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { PageContainer } from "@/components/layout";
 import { Button, Badge, Modal, Input, useToast } from "@/components/ui";
-import { DataTable, type Column } from "@/components/data";
+import { DataTable, type Column, CustomFieldsForm, saveCustomFieldValues, type CustomFieldDef } from "@/components/data";
 import { useOrganization } from "@/lib/organization";
 import { cn } from "@/lib/cn";
 
@@ -112,6 +112,10 @@ export default function ContactsPage() {
   const [formOrigin, setFormOrigin] = useState("");
   const [formCompanyId, setFormCompanyId] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
+  const [formCustomFields, setFormCustomFields] = useState<Record<string, string>>({});
+  const [contactCustomFieldDefs, setContactCustomFieldDefs] = useState<CustomFieldDef[]>([]);
+  // Custom field values per contact: { contactId: { fieldId: value } }
+  const [contactCfValues, setContactCfValues] = useState<Record<string, Record<string, string>>>({});
 
   // Companies for select
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
@@ -158,6 +162,43 @@ export default function ContactsPage() {
     fetchContacts();
   }, [fetchContacts]);
 
+  // Load custom field defs once
+  useEffect(() => {
+    async function loadDefs() {
+      try {
+        const res = await fetch("/api/custom-fields?entity_type=contact");
+        if (!res.ok) return;
+        const data = (await res.json()) as CustomFieldDef[];
+        setContactCustomFieldDefs(data.filter((f) => f.is_active));
+      } catch { /* ignore */ }
+    }
+    loadDefs();
+  }, []);
+
+  // Load custom field values for visible contacts
+  useEffect(() => {
+    if (contacts.length === 0 || contactCustomFieldDefs.length === 0) return;
+    async function loadCfValues() {
+      const map: Record<string, Record<string, string>> = {};
+      await Promise.all(
+        contacts.map(async (c) => {
+          try {
+            const res = await fetch(
+              `/api/custom-field-values?entity_id=${c.id}&entity_type=contact`,
+            );
+            if (!res.ok) return;
+            const vals = (await res.json()) as Array<{ custom_field_id: string; value: string }>;
+            const valMap: Record<string, string> = {};
+            for (const v of vals) valMap[v.custom_field_id] = v.value;
+            map[c.id] = valMap;
+          } catch { /* ignore */ }
+        }),
+      );
+      setContactCfValues(map);
+    }
+    loadCfValues();
+  }, [contacts, contactCustomFieldDefs]);
+
   // Debounced search
   const [searchInput, setSearchInput] = useState("");
   useEffect(() => {
@@ -176,6 +217,7 @@ export default function ContactsPage() {
     setFormOrigin("");
     setFormCompanyId("");
     setEditId(null);
+    setFormCustomFields({});
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -204,6 +246,11 @@ export default function ContactsPage() {
       if (!res.ok) {
         toast(json.error || "Erro ao criar contato", "error");
         return;
+      }
+
+      // Save custom field values
+      if (Object.keys(formCustomFields).length > 0 && json.id) {
+        await saveCustomFieldValues(json.id as string, "contact", formCustomFields);
       }
 
       toast("Contato criado com sucesso!", "success");
@@ -240,6 +287,11 @@ export default function ContactsPage() {
       if (!res.ok) {
         toast(json.error || "Erro ao atualizar contato", "error");
         return;
+      }
+
+      // Save custom field values
+      if (Object.keys(formCustomFields).length > 0 && editId) {
+        await saveCustomFieldValues(editId, "contact", formCustomFields);
       }
 
       toast("Contato atualizado!", "success");
@@ -464,9 +516,32 @@ export default function ContactsPage() {
     },
   ];
 
-  const columns = isB2C
+  // Dynamic custom field columns
+  const customFieldColumns: Column<ContactRow>[] = contactCustomFieldDefs.map((field) => ({
+    key: `cf_${field.id}` as keyof ContactRow,
+    label: field.field_name,
+    sortable: false,
+    render: (row: ContactRow) => {
+      const val = contactCfValues[row.id]?.[field.id];
+      if (!val) return "—";
+      if (field.field_type === "boolean") return val === "true" ? "Sim" : "Não";
+      if (field.field_type === "date") return new Date(val).toLocaleDateString("pt-BR");
+      return val;
+    },
+  }));
+
+  // Insert custom columns before the actions column (last column)
+  const baseColumns = isB2C
     ? allColumns.filter((c) => c.key !== "companies")
     : allColumns;
+
+  const columns = customFieldColumns.length > 0
+    ? [
+        ...baseColumns.slice(0, -1),
+        ...customFieldColumns,
+        baseColumns[baseColumns.length - 1],
+      ]
+    : baseColumns;
 
   // --- Contact form fields (shared between create/edit) ---
   function renderContactForm(onSubmit: (e: React.FormEvent) => void) {
@@ -530,6 +605,14 @@ export default function ContactsPage() {
             ))}
           </select>
         </div>
+        {/* Custom fields */}
+        <CustomFieldsForm
+          entityType="contact"
+          entityId={editId ?? undefined}
+          values={formCustomFields}
+          onChange={setFormCustomFields}
+          onFieldsLoaded={setContactCustomFieldDefs}
+        />
         <div className="flex justify-end gap-3 pt-2">
           <Button
             variant="secondary"

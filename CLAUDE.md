@@ -54,6 +54,7 @@ Always use Context7 MCP tools before planning or implementing code that involves
 - loss_reasons — id, name, is_active, organization_id
 - task_types — id, name, icon, is_active, organization_id
 - custom_fields — id, entity_type, field_name, field_type, field_options, is_required, field_order, is_active, organization_id
+- custom_field_values — id, custom_field_id, entity_id, entity_type, value, organization_id, created_at, updated_at
 - notification_preferences — id, user_id, organization_id, notify_deal_assigned, notify_deal_stage_changed, notify_task_due, notify_task_overdue, notify_new_contact, notify_deal_won, notify_deal_lost, email_notifications, browser_notifications
 - lead_distribution_rules — id, name, description, rule_type, rule_config, is_active, priority, organization_id
 
@@ -85,6 +86,7 @@ Always use Context7 MCP tools before planning or implementing code that involves
 - /api/task-types/[id] — PUT, DELETE
 - /api/custom-fields — GET, POST
 - /api/custom-fields/[id] — PUT, DELETE
+- /api/custom-field-values — GET (entity_id, entity_type), POST (upsert batch)
 - /api/notification-preferences — GET, PUT (upsert)
 - /api/lead-distribution — GET, POST
 - /api/lead-distribution/[id] — PUT, DELETE

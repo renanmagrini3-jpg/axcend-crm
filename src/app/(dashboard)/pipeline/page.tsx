@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { PageContainer } from "@/components/layout";
 import { Button, Modal, Input } from "@/components/ui";
-import { PipelineBoard, type StageData, type DealCardData } from "@/components/data";
+import { PipelineBoard, type StageData, type DealCardData, CustomFieldsForm, saveCustomFieldValues } from "@/components/data";
 import type { DealFromApi } from "@/components/data/DealDetailPanel";
 import { useOrganization } from "@/lib/organization";
 import { cn } from "@/lib/cn";
@@ -108,6 +108,7 @@ export default function PipelinePage() {
   const [newDealPriority, setNewDealPriority] = useState<Priority>("MEDIUM");
   const [newDealAssigneeId, setNewDealAssigneeId] = useState("");
   const [newDealSubmitting, setNewDealSubmitting] = useState(false);
+  const [newDealCustomFields, setNewDealCustomFields] = useState<Record<string, string>>({});
 
   const { isB2C } = useOrganization();
   const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId);
@@ -277,6 +278,10 @@ export default function PipelinePage() {
 
     if (res.ok) {
       const created = (await res.json()) as DealFromAPI;
+      // Save custom field values
+      if (Object.keys(newDealCustomFields).length > 0) {
+        await saveCustomFieldValues(created.id, "deal", newDealCustomFields);
+      }
       setDeals((prev) => [created, ...prev]);
       setNewDealOpen(false);
       setNewDealTitle("");
@@ -285,6 +290,7 @@ export default function PipelinePage() {
       setNewDealCompanyId("");
       setNewDealAssigneeId("");
       setNewDealPriority("MEDIUM");
+      setNewDealCustomFields({});
     }
   }, [
     newDealTitle,
@@ -293,6 +299,7 @@ export default function PipelinePage() {
     newDealCompanyId,
     newDealAssigneeId,
     newDealPriority,
+    newDealCustomFields,
     selectedPipeline,
     stages,
   ]);
@@ -630,6 +637,13 @@ export default function PipelinePage() {
               ))}
             </div>
           </div>
+
+          {/* Custom fields */}
+          <CustomFieldsForm
+            entityType="deal"
+            values={newDealCustomFields}
+            onChange={setNewDealCustomFields}
+          />
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">

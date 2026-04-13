@@ -16,6 +16,8 @@ import { cn } from "@/lib/cn";
 import { overlay } from "@/lib/motion";
 import { Badge, Avatar, Button, Modal, useToast } from "@/components/ui";
 import { useOrganization } from "@/lib/organization";
+import { CustomFieldsForm, saveCustomFieldValues } from "./CustomFieldsForm";
+import type { CustomFieldDef } from "./CustomFieldsForm";
 import { NewTaskModal } from "./NewTaskModal";
 import type { DealCardData } from "./DealCard";
 import type { StageData } from "./PipelineBoard";
@@ -154,6 +156,10 @@ function DealDetailPanel({
   const [notes, setNotes] = useState<DealNote[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
 
+  // Custom fields display
+  const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+
   const [editOpen, setEditOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
@@ -168,6 +174,7 @@ function DealDetailPanel({
     assigned_to_id: "",
   });
   const [editSaving, setEditSaving] = useState(false);
+  const [editCustomFields, setEditCustomFields] = useState<Record<string, string>>({});
   const [teamMembers, setTeamMembers] = useState<Array<{ id: string; name: string }>>([]);
 
   // Move form state
@@ -259,18 +266,40 @@ function DealDetailPanel({
     }
   }, []);
 
+  const loadCustomFields = useCallback(async (dealId: string) => {
+    try {
+      const [defsRes, valsRes] = await Promise.all([
+        fetch("/api/custom-fields?entity_type=deal"),
+        fetch(`/api/custom-field-values?entity_id=${dealId}&entity_type=deal`),
+      ]);
+      if (defsRes.ok) {
+        const defs = (await defsRes.json()) as CustomFieldDef[];
+        setCustomFieldDefs(defs.filter((d) => d.is_active));
+      }
+      if (valsRes.ok) {
+        const vals = (await valsRes.json()) as Array<{ custom_field_id: string; value: string }>;
+        const map: Record<string, string> = {};
+        for (const v of vals) map[v.custom_field_id] = v.value;
+        setCustomFieldValues(map);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     if (!deal) {
       setFullDeal(null);
       setNotes([]);
       setTasksCount(0);
       setLinkedTasks([]);
+      setCustomFieldDefs([]);
+      setCustomFieldValues({});
       return;
     }
     loadFullDeal(deal.id);
     loadTasksCount(deal.id);
     loadNotes(deal.id);
-  }, [deal, loadFullDeal, loadTasksCount, loadNotes]);
+    loadCustomFields(deal.id);
+  }, [deal, loadFullDeal, loadTasksCount, loadNotes, loadCustomFields]);
 
   // --- Open edit modal: hydrate form from fullDeal ---
 
@@ -332,6 +361,12 @@ function DealDetailPanel({
         toast(json.error || "Erro ao salvar deal", "error");
         return;
       }
+      // Save custom field values
+      if (Object.keys(editCustomFields).length > 0) {
+        await saveCustomFieldValues(fullDeal.id, "deal", editCustomFields);
+        // Refresh display values
+        setCustomFieldValues({ ...editCustomFields });
+      }
       setFullDeal(json as DealFromApi);
       onDealUpdated?.(json as DealFromApi);
       toast("Deal atualizado", "success");
@@ -341,7 +376,7 @@ function DealDetailPanel({
     } finally {
       setEditSaving(false);
     }
-  }, [fullDeal, editForm, toast, onDealUpdated]);
+  }, [fullDeal, editForm, editCustomFields, toast, onDealUpdated]);
 
   // --- Move stage ---
 
@@ -609,6 +644,36 @@ function DealDetailPanel({
                 )}
               </div>
 
+              {/* Custom fields display */}
+              {customFieldDefs.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                    Campos Personalizados
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {customFieldDefs.map((field) => {
+                      const val = customFieldValues[field.id];
+                      let displayVal = val || "—";
+                      if (field.field_type === "boolean") {
+                        displayVal = val === "true" ? "Sim" : val === "false" ? "Não" : "—";
+                      } else if (field.field_type === "date" && val) {
+                        displayVal = new Date(val).toLocaleDateString("pt-BR");
+                      }
+                      return (
+                        <div key={field.id}>
+                          <p className="text-xs text-[var(--text-muted)] mb-1">
+                            {field.field_name}
+                          </p>
+                          <p className="text-sm font-medium text-[var(--text-primary)]">
+                            {displayVal}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Actions */}
               <div className="mb-6 flex flex-wrap gap-2">
                 <Button
@@ -830,6 +895,14 @@ function DealDetailPanel({
                   ))}
                 </select>
               </div>
+
+              {/* Custom fields */}
+              <CustomFieldsForm
+                entityType="deal"
+                entityId={fullDeal?.id}
+                values={editCustomFields}
+                onChange={setEditCustomFields}
+              />
 
               <div className="flex justify-end gap-2 pt-2">
                 <Button
